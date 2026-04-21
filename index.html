@@ -92,6 +92,24 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 
 .app-title .icon { font-size: 22px; }
+.app-logo-img {
+  height: 32px;
+  width: auto;
+  max-width: 100px;
+  object-fit: contain;
+  background: white;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.login-logo-img {
+  max-width: 180px;
+  max-height: 100px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin: 0 auto 20px;
+  display: block;
+}
 
 .header-btn {
   background: rgba(255,255,255,.15);
@@ -811,10 +829,80 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   box-shadow: 0 4px 14px rgba(43, 140, 126, 0.25);
 }
 .next-option.primary:active { background: var(--teal-dark); }
+.next-option.secondary {
+  background: var(--surface);
+  border: 2px solid var(--teal);
+  color: var(--teal-dark);
+}
+.next-option.secondary:active { background: var(--teal-light); }
+.next-option.secondary .next-option-icon {
+  background: var(--teal);
+  color: white;
+}
 .next-option.muted {
   background: transparent;
   border-style: dashed;
   color: var(--text-muted);
+}
+
+.next-jump {
+  background: var(--gold-light);
+  border: 1.5px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.next-jump-label {
+  font-weight: 600;
+  color: #6b5200;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+.next-jump-row {
+  display: flex;
+  gap: 8px;
+}
+.next-jump-input {
+  flex: 1;
+  padding: 12px 14px;
+  border: 2px solid var(--gold);
+  border-radius: var(--radius-sm);
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  background: white;
+  font-family: inherit;
+  color: var(--navy);
+}
+.next-jump-input:focus {
+  outline: none;
+  border-color: var(--gold-dark);
+  box-shadow: 0 0 0 3px rgba(198, 166, 54, 0.2);
+}
+.next-jump-btn {
+  width: 60px;
+  background: var(--gold-dark);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 22px;
+  font-weight: 700;
+  transition: background .15s, transform .05s;
+}
+.next-jump-btn:active { background: #6b5200; transform: scale(.96); }
+.next-jump-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.next-jump-btn-small {
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--teal);
+  color: white;
+  cursor: pointer;
+  margin-top: 4px;
 }
 
 .next-option-icon {
@@ -1015,7 +1103,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 <div class="app-header" id="header">
   <div class="title-row">
     <div class="app-title">
-      <span class="icon">🗑️</span>
+      <img src="logo-bb.jpg" alt="בני ברק" class="app-logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+      <span class="icon" style="display:none;">🗑️</span>
       <span>ספירת פחים</span>
     </div>
     <div id="header-actions" style="display:flex; gap:8px; align-items:center;">
@@ -1035,7 +1124,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 <div class="screen active" id="screen-login">
   <div class="container">
     <div class="login-card">
-      <div class="login-icon">🗑️</div>
+      <img src="logo-bb.jpg" alt="עיריית בני ברק" class="login-logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+      <div class="login-icon" style="display:none;">🗑️</div>
       <div class="login-title">ספירת פחים</div>
       <div class="login-subtitle">עיריית בני ברק · אגף בקרה</div>
 
@@ -1291,6 +1381,7 @@ const state = {
   streetText: '',       // dual-field: street name
   numberText: '',       // dual-field: house number
   lastSaved: null,      // last saved address - for next-action screen
+  nearbyStreet: null,   // reverse-geocoded street name for "nearby" filter
   renderLimit: CONFIG.RENDER_CAP,
   online: navigator.onLine,
   syncing: false,
@@ -1683,18 +1774,11 @@ function filteredAddresses() {
       list = list.filter(a => map[a.address_id]?.mineToday);
       break;
     case 'nearby':
-      if (state.currentGps) {
-        list = list
-          .map(a => ({
-            addr: a,
-            dist: (a['lat'] && a['lng'])
-              ? haversine(state.currentGps.lat, state.currentGps.lng, +a.lat, +a.lng)
-              : Infinity
-          }))
-          .sort((x, y) => x.dist - y.dist)
-          .slice(0, 30)
-          .map(x => x.addr);
-      } else {
+      // 'nearby' is implemented by reverseGeocodeAndFilter() which sets
+      // state.nearbyStreet — we just filter to that street if set.
+      if (state.nearbyStreet) {
+        list = list.filter(a => a['שם רחוב'] === state.nearbyStreet);
+      } else if (!state.currentGps) {
         toast('אין עדיין מיקום GPS', 'warning');
       }
       break;
@@ -1772,7 +1856,86 @@ function setFilter(f) {
   state.renderLimit = CONFIG.RENDER_CAP;
   $$('.chip').forEach(c => c.classList.toggle('active', c.dataset.filter === f));
   localStorage.setItem(STORAGE.FILTER, f);
-  renderList();
+
+  if (f === 'nearby') {
+    // Trigger reverse geocoding asynchronously
+    reverseGeocodeAndFilter();
+  } else {
+    state.nearbyStreet = null;
+    renderList();
+  }
+}
+
+/** מזהה את הרחוב שבו הסוקר נמצא באמצעות Nominatim reverse geocoding. */
+async function reverseGeocodeAndFilter() {
+  // If GPS not available yet, try to capture it now
+  if (!state.currentGps) {
+    toast('ממתין למיקום GPS...', 'warning');
+    await new Promise(resolve => {
+      if (!navigator.geolocation) { resolve(); return; }
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          state.currentGps = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy
+          };
+          resolve();
+        },
+        () => resolve(),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
+      );
+    });
+  }
+
+  if (!state.currentGps) {
+    toast('GPS לא זמין - לא ניתן לזהות מיקום', 'error');
+    renderList();
+    return;
+  }
+
+  if (!state.online) {
+    toast('אין רשת - דרושה חיבור לזיהוי מיקום', 'warning');
+    renderList();
+    return;
+  }
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${state.currentGps.lat}&lng=${state.currentGps.lng}&addressdetails=1&accept-language=he`
+      .replace('&lng=', '&lon='); // Nominatim uses 'lon'
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const detected = data.address?.road || data.address?.street || data.address?.pedestrian || '';
+
+    if (!detected) {
+      toast('לא זוהה רחוב במיקום הנוכחי', 'warning');
+      state.nearbyStreet = null;
+      renderList();
+      return;
+    }
+
+    // Find best match in our addresses list
+    const streets = getUniqueStreets();
+    const exactMatch = streets.find(s => s.name === detected);
+    const partialMatch = exactMatch || streets.find(s =>
+      s.name.includes(detected) || detected.includes(s.name)
+    );
+
+    if (partialMatch) {
+      state.nearbyStreet = partialMatch.name;
+      toast(`זוהה: ${partialMatch.name}`, 'success');
+    } else {
+      state.nearbyStreet = null;
+      toast(`זוהה "${detected}" - לא נמצא ברשימה`, 'warning');
+    }
+    renderList();
+  } catch (err) {
+    console.warn('Reverse geocode failed:', err);
+    toast('שגיאה בזיהוי המיקום', 'error');
+    state.nearbyStreet = null;
+    renderList();
+  }
 }
 
 function clearStreet() {
@@ -2323,11 +2486,77 @@ function findNextUnfinishedStreet(currentStreet) {
   return null;
 }
 
+/** מוצא את הבית הבא באותו צד של הרחוב (אותה זוגיות). */
+function findNextSameSide(justSaved) {
+  const statusMap = buildSurveyStatusMap();
+  const street = justSaved['שם רחוב'];
+  const currentNum = parseInt(justSaved['מספר בית'], 10);
+  if (isNaN(currentNum)) return null;
+  const currentParity = currentNum % 2;
+
+  const candidates = state.addresses
+    .filter(a => a['שם רחוב'] === street && a.address_id !== justSaved.address_id)
+    .map(a => ({ addr: a, num: parseInt(a['מספר בית'], 10) }))
+    .filter(x => !isNaN(x.num) && x.num > currentNum && x.num % 2 === currentParity && !statusMap[x.addr.address_id])
+    .sort((a, b) => a.num - b.num);
+
+  return candidates[0]?.addr || null;
+}
+
+/** מוצא את הבית הבא בצד השני של הרחוב (זוגיות הפוכה). */
+function findNextOtherSide(justSaved) {
+  const statusMap = buildSurveyStatusMap();
+  const street = justSaved['שם רחוב'];
+  const currentNum = parseInt(justSaved['מספר בית'], 10);
+  if (isNaN(currentNum)) return null;
+  const currentParity = currentNum % 2;
+
+  const candidates = state.addresses
+    .filter(a => a['שם רחוב'] === street && a.address_id !== justSaved.address_id)
+    .map(a => ({ addr: a, num: parseInt(a['מספר בית'], 10) }))
+    .filter(x => !isNaN(x.num) && x.num % 2 !== currentParity && !statusMap[x.addr.address_id])
+    .sort((a, b) => {
+      // Prefer numbers close to current (same building roughly across street)
+      return Math.abs(a.num - currentNum) - Math.abs(b.num - currentNum);
+    });
+
+  return candidates[0]?.addr || null;
+}
+
+/** הבית הקרוב ביותר שלא נסקר, בלי קשר לצד — עבור "חזור להשלים". */
+function findNearestMissing(justSaved) {
+  const statusMap = buildSurveyStatusMap();
+  const street = justSaved['שם רחוב'];
+  const currentNum = parseInt(justSaved['מספר בית'], 10);
+  if (isNaN(currentNum)) return null;
+
+  // Look backwards (lower numbers) - numbers we "skipped" behind
+  const candidates = state.addresses
+    .filter(a => a['שם רחוב'] === street && a.address_id !== justSaved.address_id)
+    .map(a => ({ addr: a, num: parseInt(a['מספר בית'], 10) }))
+    .filter(x => !isNaN(x.num) && x.num < currentNum && !statusMap[x.addr.address_id])
+    .sort((a, b) => b.num - a.num); // highest-lower first (nearest skipped)
+
+  return candidates[0]?.addr || null;
+}
+
+/** נמצא כתובת ברחוב לפי מספר. */
+function findAddressOnStreet(street, number) {
+  const numStr = String(number).trim();
+  return state.addresses.find(a =>
+    a['שם רחוב'] === street && String(a['מספר בית']) === numStr
+  );
+}
+
 function showNextActionScreen(justSaved) {
   state.lastSaved = justSaved;
 
   const street = justSaved['שם רחוב'];
   const num = justSaved['מספר בית'];
+  const currentNum = parseInt(num, 10);
+  const currentParity = isNaN(currentNum) ? null : currentNum % 2;
+  const sideLabel = currentParity === 0 ? 'זוגי' : currentParity === 1 ? 'אי-זוגי' : '';
+  const otherSideLabel = currentParity === 0 ? 'אי-זוגי' : 'זוגי';
 
   // מלא את ההדר
   $('#next-just-saved-addr').textContent = `${street} ${num}`;
@@ -2335,58 +2564,75 @@ function showNextActionScreen(justSaved) {
     `${state.counts['360']} × פחי 360 · ${state.counts['1100']} × פחי 1100`;
 
   // חשב אפשרויות
-  const nextInStreet = findAdjacentUnsurveyed(justSaved, 'next');
-  const prevInStreet = findAdjacentUnsurveyed(justSaved, 'previous');
+  const sameSide = findNextSameSide(justSaved);
+  const otherSide = findNextOtherSide(justSaved);
+  const skipped = findNearestMissing(justSaved);
   const remainingOnStreet = countUnsurveyedOnStreet(street, justSaved.address_id);
 
-  // בנה את רשימת האפשרויות
   const optionsEl = $('#next-options');
   const parts = [];
 
-  if (nextInStreet) {
+  // ──── אופציה 1: אותו צד (הכפתור הראשי) ────
+  if (sameSide) {
     parts.push(`
-      <button class="next-option primary" onclick="openSurvey('${nextInStreet.address_id}')">
+      <button class="next-option primary" onclick="openSurvey('${sameSide.address_id}')">
         <div class="next-option-icon">→</div>
         <div class="next-option-body">
-          <div class="next-option-main">המשך לכתובת הבאה</div>
-          <div class="next-option-detail">${escapeHtml(street)} <strong>${escapeHtml(String(nextInStreet['מספר בית']))}</strong></div>
+          <div class="next-option-main">המשך ל-${escapeHtml(String(sameSide['מספר בית']))}</div>
+          <div class="next-option-detail">אותו צד (${sideLabel}) · ${escapeHtml(street)}</div>
         </div>
         <div class="next-option-chevron">‹</div>
       </button>
     `);
   }
 
-  if (prevInStreet) {
+  // ──── אופציה 2: הצד השני ────
+  if (otherSide) {
     parts.push(`
-      <button class="next-option" onclick="openSurvey('${prevInStreet.address_id}')">
+      <button class="next-option secondary" onclick="openSurvey('${otherSide.address_id}')">
+        <div class="next-option-icon">⇄</div>
+        <div class="next-option-body">
+          <div class="next-option-main">המשך ל-${escapeHtml(String(otherSide['מספר בית']))}</div>
+          <div class="next-option-detail">צד שני (${otherSideLabel}) · ${escapeHtml(street)}</div>
+        </div>
+        <div class="next-option-chevron">‹</div>
+      </button>
+    `);
+  }
+
+  // ──── אופציה 3: קפיצה למספר ספציפי ────
+  parts.push(`
+    <div class="next-jump">
+      <div class="next-jump-label">🔢 קפוץ למספר ספציפי ברחוב ${escapeHtml(street)}</div>
+      <div class="next-jump-row">
+        <input type="tel" inputmode="numeric" class="next-jump-input" id="next-jump-input"
+               placeholder="מס' בית" autocomplete="off" onkeydown="if(event.key==='Enter')jumpToNumber('${escapeJs(street)}')">
+        <button class="next-jump-btn" onclick="jumpToNumber('${escapeJs(street)}')">←</button>
+      </div>
+      <div class="next-jump-hint" id="next-jump-hint">נותרו ${remainingOnStreet} בתים לא נסקרים ברחוב</div>
+    </div>
+  `);
+
+  // ──── אופציה 4: בית שדולג (אחורה) - רק אם יש ────
+  if (skipped) {
+    parts.push(`
+      <button class="next-option" onclick="openSurvey('${skipped.address_id}')">
         <div class="next-option-icon">↶</div>
         <div class="next-option-body">
-          <div class="next-option-main">חזור להשלים כתובת שדולגה</div>
-          <div class="next-option-detail">${escapeHtml(street)} <strong>${escapeHtml(String(prevInStreet['מספר בית']))}</strong> · עדיין לא נסקר</div>
+          <div class="next-option-main">חזור להשלים ${escapeHtml(String(skipped['מספר בית']))}</div>
+          <div class="next-option-detail">דולג ברחוב — עדיין לא נסקר</div>
         </div>
         <div class="next-option-chevron">‹</div>
       </button>
     `);
   }
 
-  // מספר אחר ברחוב
-  if (remainingOnStreet > 0) {
-    parts.push(`
-      <button class="next-option" onclick="goToStreetWithFilter('${escapeJs(street)}')">
-        <div class="next-option-icon">🔢</div>
-        <div class="next-option-body">
-          <div class="next-option-main">מספר אחר ברחוב ${escapeHtml(street)}</div>
-          <div class="next-option-detail">נותרו ${remainingOnStreet} בתים לא נסקרים ברחוב</div>
-        </div>
-        <div class="next-option-chevron">‹</div>
-      </button>
-    `);
-  } else {
-    // הושלם הרחוב!
+  // ──── אופציה 5: אם הרחוב הושלם ────
+  if (remainingOnStreet === 0 && !sameSide && !otherSide) {
     const nextStreet = findNextUnfinishedStreet(street);
+    parts.push(`<div class="next-celebration">🎉 סיימת את כל ${escapeHtml(street)}!</div>`);
     if (nextStreet) {
       parts.push(`
-        <div class="next-celebration">🎉 סיימת את כל ${escapeHtml(street)}!</div>
         <button class="next-option primary" onclick="goToStreetWithFilter('${escapeJs(nextStreet.name)}')">
           <div class="next-option-icon">→</div>
           <div class="next-option-body">
@@ -2396,12 +2642,10 @@ function showNextActionScreen(justSaved) {
           <div class="next-option-chevron">‹</div>
         </button>
       `);
-    } else {
-      parts.push(`<div class="next-celebration">🎉 סיימת את כל ${escapeHtml(street)}!</div>`);
     }
   }
 
-  // חזרה לרשימה
+  // ──── אופציה 6: חזרה לרשימה ────
   parts.push(`
     <button class="next-option muted" onclick="goToList()">
       <div class="next-option-icon">☰</div>
@@ -2415,6 +2659,63 @@ function showNextActionScreen(justSaved) {
 
   optionsEl.innerHTML = parts.join('');
   showScreen('next');
+}
+
+/** קפיצה לבית ספציפי ברחוב - מופעל על ידי כפתור או Enter. */
+function jumpToNumber(street) {
+  const input = $('#next-jump-input');
+  const num = (input?.value || '').trim();
+  const hint = $('#next-jump-hint');
+
+  if (!num) {
+    if (hint) hint.innerHTML = '<span style="color:var(--danger)">הזן מספר</span>';
+    input?.focus();
+    return;
+  }
+
+  const found = findAddressOnStreet(street, num);
+  if (found) {
+    openSurvey(found.address_id);
+    return;
+  }
+
+  // Not found in list - offer to add as new
+  const streets = getUniqueStreets();
+  const streetInfo = streets.find(s => s.name === street);
+  const isBeyondMax = streetInfo && parseInt(num, 10) > streetInfo.maxNum;
+
+  if (hint) {
+    hint.innerHTML = `
+      <div style="color:var(--danger);margin-bottom:6px;">⚠️ ${escapeHtml(street)} ${escapeHtml(num)} לא נמצא ברשימה
+        ${isBeyondMax ? `<br><span style="color:var(--text-muted);font-size:11px;">(רשומים עד מספר ${streetInfo.maxNum})</span>` : ''}
+      </div>
+      <button class="next-jump-btn-small" onclick="addAndOpenNew('${escapeJs(street)}','${escapeJs(num)}')">
+        ➕ הוסף ${escapeHtml(num)} כחדש וסקר
+      </button>
+    `;
+  }
+}
+
+function addAndOpenNew(street, num) {
+  const sample = state.addresses.find(a => a['שם רחוב'] === street);
+  const streetCode = sample ? sample['סמל רחוב'] : '9999';
+  const newId = String(streetCode).padStart(4, '0') + '-' + String(num).padStart(4, '0') + '-NEW';
+
+  let addr = state.addresses.find(a => a.address_id === newId);
+  if (!addr) {
+    addr = {
+      address_id: newId,
+      'שם רחוב': street,
+      'מספר בית': num,
+      'שכונה': '',
+      'סמל רחוב': streetCode,
+      'מיקוד': sample ? sample['מיקוד'] : '',
+      _isNew: true
+    };
+    state.addresses.push(addr);
+    invalidateStreetsCache();
+  }
+  openSurvey(newId);
 }
 
 /** מעבר לרשימה עם פילטר של רחוב ספציפי. */
