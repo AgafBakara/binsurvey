@@ -104,6 +104,16 @@ a:hover { text-decoration: underline; }
   color: var(--navy);
   box-shadow: 0 4px 10px rgba(198, 166, 54, 0.3);
 }
+.brand-logo {
+  height: 46px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  background: white;
+  padding: 3px 6px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+}
 .brand .texts {
   display: flex;
   flex-direction: column;
@@ -773,7 +783,8 @@ table.tbl {
 <div class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <div class="logo">📊</div>
+      <img src="logo-bb.jpg" alt="עיריית בני ברק" class="brand-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+      <div class="logo" style="display:none;">📊</div>
       <div class="texts">
         <div class="title">ספירת פחים — דשבורד ניהולי</div>
         <div class="subtitle">עיריית בני ברק · אגף בקרה</div>
@@ -1215,6 +1226,30 @@ function fmtDateTime(d) {
 function dayKey(d) { return new Date(d).toISOString().slice(0, 10); }
 function todayKey() { return new Date().toISOString().slice(0, 10); }
 
+/** מחלץ רשימת תמונות מרשומה (תומך בכמה גרסאות של שמות עמודות). */
+function getRecordImages(r) {
+  if (!r) return [];
+  return [
+    r['תמונה_URL_1'], r['תמונה_URL_2'], r['תמונה_URL_3'],
+    r['תמונה_URL'],    // backward compat - single image column
+    r.image_url,
+    r.image_urls        // if array passed
+  ].flat().filter(x => x && typeof x === 'string' && x.startsWith('http'));
+}
+
+/** מחלץ GPS מרשומה. */
+function getRecordGps(r) {
+  if (!r) return null;
+  const lat = parseFloat(r.GPS_lat ?? r.gps_lat ?? r['GPS lat'] ?? '');
+  const lng = parseFloat(r.GPS_lng ?? r.gps_lng ?? r['GPS lng'] ?? '');
+  return (isFinite(lat) && isFinite(lng) && lat !== 0 && lng !== 0) ? { lat, lng } : null;
+}
+
+/** סופר את כל הרשומות שיש להן GPS. */
+function countRecordsWithGps() {
+  return state.records.filter(r => getRecordGps(r)).length;
+}
+
 /* ═══════════════════════════════════════════════════
    API
    ═══════════════════════════════════════════════════ */
@@ -1482,14 +1517,13 @@ function renderBars(items, cls = '') {
 }
 
 function recordRow(r) {
-  const img = r['תמונה_URL'] || r.image_url || '';
-  const imgs = [r['תמונה_URL_1'], r['תמונה_URL_2'], r['תמונה_URL_3']].filter(Boolean);
-  const firstImg = imgs[0] || img;
-  const imgCell = firstImg
-    ? `<a href="${escapeHtml(firstImg)}" target="_blank" title="פתח תמונה">📷${imgs.length > 1 ? ' ×' + imgs.length : ''}</a>`
+  const imgs = getRecordImages(r);
+  const imgCell = imgs.length
+    ? `<a href="#" onclick="openAddressDetail('${escapeJs(r.address_id || '')}'); return false;" title="פתח פרטי כתובת">📷${imgs.length > 1 ? ' ×' + imgs.length : ''}</a>`
     : '<span style="color: var(--text-dim);">—</span>';
+  const clickAttr = r.address_id ? `onclick="openAddressDetail('${escapeJs(r.address_id)}')" style="cursor:pointer"` : '';
   return `
-    <tr>
+    <tr ${clickAttr}>
       <td><span class="inline-mini">${fmtDateTime(r.timestamp)}</span></td>
       <td><strong>${escapeHtml(r['שם רחוב'] || '')} ${escapeHtml(String(r['מספר בית'] || ''))}</strong>${r['שכונה'] ? ' <span class="badge teal">' + escapeHtml(r['שכונה']) + '</span>' : ''}</td>
       <td>${escapeHtml(r['סוקר'] || '—')}</td>
@@ -1693,21 +1727,26 @@ function renderMap() {
 
   // Use latest record per address
   const latestByAddr = getLatestByAddress();
-  let recs = Object.values(latestByAddr).filter(r => r.GPS_lat && r.GPS_lng);
+  let recs = Object.values(latestByAddr)
+    .map(r => ({ r, gps: getRecordGps(r) }))
+    .filter(x => x.gps);
 
-  if (surveyorFilter) recs = recs.filter(r => r['סוקר'] === surveyorFilter);
+  if (surveyorFilter) recs = recs.filter(x => x.r['סוקר'] === surveyorFilter);
 
   if (recs.length === 0) {
     renderMapLegend([]);
+    const totalRecs = state.records.length;
+    const withGps = countRecordsWithGps();
+    showMapEmptyMessage(totalRecs, withGps);
     return;
   }
+  hideMapEmptyMessage();
 
   // Determine color function
   let colorFn, legendItems = [];
   if (mode === 'by_bin_count') {
-    const max = Math.max(...recs.map(r => Number(r['פחי 360']) + Number(r['פחי 1100']) || 0));
     colorFn = r => {
-      const total = Number(r['פחי 360']) + Number(r['פחי 1100']) || 0;
+      const total = (Number(r['פחי 360']) || 0) + (Number(r['פחי 1100']) || 0);
       if (total === 0) return '#94a3b8';
       if (total <= 2) return '#84cc16';
       if (total <= 4) return '#eab308';
@@ -1723,7 +1762,7 @@ function renderMap() {
     ];
   } else if (mode === 'by_surveyor') {
     colorFn = r => state.surveyorColors[r['סוקר']] || '#94a3b8';
-    const names = [...new Set(recs.map(r => r['סוקר']).filter(Boolean))];
+    const names = [...new Set(recs.map(x => x.r['סוקר']).filter(Boolean))];
     legendItems = names.map(n => ({ color: state.surveyorColors[n] || '#94a3b8', label: n }));
   } else {
     colorFn = () => '#2b8c7e';
@@ -1731,30 +1770,33 @@ function renderMap() {
   }
 
   const bounds = L.latLngBounds();
-  for (const r of recs) {
-    const lat = +r.GPS_lat, lng = +r.GPS_lng;
-    if (!isFinite(lat) || !isFinite(lng)) continue;
+  for (const x of recs) {
+    const { r, gps } = x;
+    const { lat, lng } = gps;
     const color = colorFn(r);
     const marker = L.circleMarker([lat, lng], {
-      radius: 6,
+      radius: 7,
       fillColor: color,
       color: '#fff',
-      weight: 1.5,
+      weight: 2,
       opacity: 1,
-      fillOpacity: .85
+      fillOpacity: .9
     });
-    const imgs = [r['תמונה_URL_1'], r['תמונה_URL_2'], r['תמונה_URL_3']].filter(Boolean);
+    const imgs = getRecordImages(r);
     const imgBlock = imgs.length
-      ? '<div style="margin-top:6px;">' + imgs.map(u => `<a href="${escapeHtml(u)}" target="_blank" style="margin-left:4px;">📷</a>`).join('') + '</div>'
+      ? '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">' +
+        imgs.map(u => `<a href="${escapeHtml(u)}" target="_blank" title="פתח תמונה מלאה"><img src="${escapeHtml(u)}" style="width:60px;height:45px;object-fit:cover;border-radius:4px;border:1px solid #ddd;"></a>`).join('') +
+        '</div>'
       : '';
     marker.bindPopup(`
-      <div style="font-family: Heebo, sans-serif; min-width: 180px; direction: rtl; text-align: right;">
-        <div style="font-weight:700;font-size:15px;color:#152350;">${escapeHtml(r['שם רחוב'])} ${escapeHtml(String(r['מספר בית']))}</div>
+      <div style="font-family: Heebo, sans-serif; min-width: 220px; direction: rtl; text-align: right;">
+        <div style="font-weight:700;font-size:15px;color:#152350;">${escapeHtml(r['שם רחוב'] || '')} ${escapeHtml(String(r['מספר בית'] || ''))}</div>
         ${r['שכונה'] ? `<div style="color:#6b7280;font-size:12px;">${escapeHtml(r['שכונה'])}</div>` : ''}
         <div style="margin-top:6px;"><strong>פחי 360:</strong> ${fmtNum(r['פחי 360'])} | <strong>1100:</strong> ${fmtNum(r['פחי 1100'])}</div>
         <div style="color:#6b7280;font-size:12px;margin-top:4px;">סוקר: ${escapeHtml(r['סוקר'] || '—')}</div>
         <div style="color:#9ca3af;font-size:11px;">${fmtDateTime(r.timestamp)}</div>
         ${imgBlock}
+        <div style="margin-top:8px;"><button onclick="openAddressDetail('${escapeJs(r.address_id || '')}')" style="background:#2b8c7e;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;">פרטים מלאים ←</button></div>
       </div>
     `);
     marker.addTo(state.map);
@@ -1763,10 +1805,40 @@ function renderMap() {
   }
 
   if (state.mapMarkers.length > 0 && bounds.isValid()) {
-    state.map.fitBounds(bounds, { padding: [20, 20], maxZoom: 16 });
+    state.map.fitBounds(bounds, { padding: [30, 30], maxZoom: 17 });
   }
 
   renderMapLegend(legendItems);
+}
+
+function showMapEmptyMessage(totalRecs, withGps) {
+  const mapEl = document.getElementById('map');
+  const existing = document.getElementById('map-empty-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'map-empty-overlay';
+  overlay.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px 30px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.2);text-align:center;z-index:500;max-width:90%;';
+
+  let msg = '';
+  if (totalRecs === 0) {
+    msg = '<div style="font-size:40px;margin-bottom:10px;">🗺️</div><div style="font-weight:700;color:#152350;margin-bottom:6px;">אין עדיין סקירות</div><div style="color:#6b7280;font-size:13px;">המפה תתמלא אוטומטית כשסוקרים יתחילו לעבוד</div>';
+  } else if (withGps === 0) {
+    msg = `<div style="font-size:40px;margin-bottom:10px;">📡</div><div style="font-weight:700;color:#152350;margin-bottom:6px;">אין עדיין סקירות עם GPS</div><div style="color:#6b7280;font-size:13px;">נרשמו ${fmtNum(totalRecs)} סקירות, אף אחת ללא מיקום</div><div style="color:#9ca3af;font-size:11px;margin-top:8px;">ייתכן שנעשו מהמחשב או בלי הרשאת מיקום</div>`;
+  } else {
+    msg = `<div style="font-size:40px;margin-bottom:10px;">🔍</div><div style="font-weight:700;color:#152350;">לא נמצאו תוצאות לסינון הנוכחי</div>`;
+  }
+  overlay.innerHTML = msg;
+  mapEl.style.position = 'relative';
+  mapEl.appendChild(overlay);
+}
+
+function hideMapEmptyMessage() {
+  const existing = document.getElementById('map-empty-overlay');
+  if (existing) existing.remove();
+}
+
+function escapeJs(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
 }
 
 function renderMapLegend(items) {
@@ -1854,13 +1926,14 @@ function renderRecordsTable() {
 
 function recordTableRow(r) {
   const total = (Number(r['פחי 360']) || 0) + (Number(r['פחי 1100']) || 0);
-  const imgs = [r['תמונה_URL_1'], r['תמונה_URL_2'], r['תמונה_URL_3']].filter(Boolean);
+  const imgs = getRecordImages(r);
   const imgCell = imgs.length
-    ? imgs.map(u => `<a href="${escapeHtml(u)}" target="_blank" title="פתח תמונה">📷</a>`).join(' ')
+    ? `<a href="#" onclick="event.stopPropagation(); openAddressDetail('${escapeJs(r.address_id || '')}'); return false;" title="פתח פרטים">📷 ${imgs.length}</a>`
     : '<span style="color:var(--text-dim)">—</span>';
   const color = state.surveyorColors[r['סוקר']] || 'var(--text)';
+  const clickAttr = r.address_id ? `onclick="openAddressDetail('${escapeJs(r.address_id)}')" style="cursor:pointer"` : '';
   return `
-    <tr>
+    <tr ${clickAttr}>
       <td><span class="inline-mini">${fmtDateTime(r.timestamp)}</span></td>
       <td><strong>${escapeHtml(r['שם רחוב'] || '—')}</strong></td>
       <td><strong>${escapeHtml(String(r['מספר בית'] || ''))}</strong></td>
@@ -2197,6 +2270,124 @@ function openModal(title, html) {
   $('#modal').classList.add('active');
 }
 function closeModal() { $('#modal').classList.remove('active'); }
+
+/* פרטים מלאים של כתובת עם כל הסקירות והתמונות */
+function openAddressDetail(addressId) {
+  if (!addressId) return;
+  const addr = state.addresses.find(a => a.address_id === addressId);
+  const records = state.records
+    .filter(r => r.address_id === addressId)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  if (!addr && records.length === 0) {
+    toast('כתובת לא נמצאה', 'error');
+    return;
+  }
+
+  // Address block
+  const street = addr ? addr['שם רחוב'] : (records[0] && records[0]['שם רחוב']) || '';
+  const number = addr ? addr['מספר בית'] : (records[0] && records[0]['מספר בית']) || '';
+  const nbhd = (records[0] && records[0]['שכונה']) || (addr && addr['שכונה']) || '';
+
+  // Aggregate totals from latest record
+  const latest = records[0];
+  const total360 = latest ? Number(latest['פחי 360']) || 0 : 0;
+  const total1100 = latest ? Number(latest['פחי 1100']) || 0 : 0;
+
+  let html = `
+    <div style="text-align:center;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <div style="font-size:13px;color:var(--text-muted);letter-spacing:.5px;">כתובת</div>
+      <div style="font-size:22px;font-weight:800;color:var(--navy);margin:4px 0;">${escapeHtml(street)} ${escapeHtml(String(number))}</div>
+      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;">
+        ${nbhd ? `<span class="badge teal">${escapeHtml(nbhd)}</span>` : ''}
+        <span class="badge muted" style="font-family:monospace;">${escapeHtml(addressId)}</span>
+        <span class="badge ${records.length > 0 ? 'success' : 'warning'}">${records.length > 0 ? 'נסקר' : 'לא נסקר'}</span>
+      </div>
+    </div>`;
+
+  if (latest) {
+    html += `
+      <div style="background:var(--teal-lighter);border-radius:10px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px;">סקירה אחרונה</div>
+        <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;">
+          <div><span class="bin-pill s360">פחי 360: ${fmtNum(total360)}</span></div>
+          <div><span class="bin-pill s1100">פחי 1100: ${fmtNum(total1100)}</span></div>
+          <div style="margin-right:auto;font-size:12px;color:var(--text-muted);">
+            ${escapeHtml(latest['סוקר'] || '—')} · ${fmtDateTime(latest.timestamp)}
+          </div>
+        </div>
+        ${latest['הערות'] ? `<div style="margin-top:8px;padding:8px;background:white;border-radius:6px;font-size:13px;">📝 ${escapeHtml(latest['הערות'])}</div>` : ''}
+      </div>`;
+  }
+
+  // Photos across all records
+  const allPhotos = [];
+  records.forEach(r => {
+    const imgs = getRecordImages(r);
+    imgs.forEach(url => allPhotos.push({
+      url,
+      surveyor: r['סוקר'],
+      timestamp: r.timestamp
+    }));
+  });
+
+  if (allPhotos.length > 0) {
+    html += `
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:700;margin-bottom:10px;color:var(--navy);">📷 תמונות (${allPhotos.length})</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">
+          ${allPhotos.map(p => `
+            <div style="position:relative;">
+              <a href="${escapeHtml(p.url)}" target="_blank" title="פתח בגודל מלא">
+                <img src="${escapeHtml(p.url)}" style="width:100%;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--border);">
+              </a>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:4px;text-align:center;line-height:1.2;">${escapeHtml(p.surveyor || '—')}<br>${fmtDate(p.timestamp)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  } else {
+    html += `<div style="text-align:center;color:var(--text-dim);padding:16px;background:var(--bg);border-radius:8px;margin-bottom:16px;font-size:13px;">אין תמונות לכתובת זו</div>`;
+  }
+
+  // GPS link
+  const gps = latest ? getRecordGps(latest) : null;
+  if (gps) {
+    html += `
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:700;margin-bottom:8px;color:var(--navy);">📍 מיקום</div>
+        <div style="background:var(--bg);padding:10px;border-radius:8px;font-size:13px;">
+          <div style="font-family:monospace;color:var(--text-muted);">${gps.lat.toFixed(6)}, ${gps.lng.toFixed(6)}</div>
+          <a href="https://www.google.com/maps/search/?api=1&query=${gps.lat},${gps.lng}" target="_blank" style="display:inline-block;margin-top:6px;font-weight:600;">
+            🗺️ פתח ב-Google Maps
+          </a>
+        </div>
+      </div>`;
+  }
+
+  // History table
+  if (records.length > 1) {
+    html += `
+      <div>
+        <div style="font-weight:700;margin-bottom:10px;color:var(--navy);">📋 היסטוריית סקירות (${records.length})</div>
+        <div class="tbl-wrap"><table class="tbl" style="font-size:12px;">
+          <thead><tr><th>זמן</th><th>סוקר</th><th>360</th><th>1100</th><th>הערות</th></tr></thead>
+          <tbody>
+            ${records.map((r, i) => `
+              <tr ${i === 0 ? 'style="background:var(--teal-lighter);"' : ''}>
+                <td>${fmtDateTime(r.timestamp)}${i === 0 ? ' <span class="badge success" style="font-size:10px;">אחרון</span>' : ''}</td>
+                <td>${escapeHtml(r['סוקר'] || '—')}</td>
+                <td>${fmtNum(r['פחי 360'])}</td>
+                <td>${fmtNum(r['פחי 1100'])}</td>
+                <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r['הערות'] || '')}">${escapeHtml(r['הערות'] || '—')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>`;
+  }
+
+  openModal(`פרטי כתובת`, html);
+}
 
 /* ═══════════════════════════════════════════════════
    TAB SWITCHING
