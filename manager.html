@@ -888,6 +888,29 @@ table.tbl {
       </div>
     </div>
 
+    <div class="kpi-grid">
+      <div class="kpi warning">
+        <div class="kpi-label"><span class="ico">⚠️</span>פחים שבורים</div>
+        <div class="kpi-value" id="kpi-broken-total">—</div>
+        <div class="kpi-sub" id="kpi-broken-total-sub">—</div>
+      </div>
+      <div class="kpi warning">
+        <div class="kpi-label"><span class="ico">⚠️</span>360 שבורים</div>
+        <div class="kpi-value" id="kpi-broken-360">—</div>
+        <div class="kpi-sub" id="kpi-broken-360-sub">—</div>
+      </div>
+      <div class="kpi warning">
+        <div class="kpi-label"><span class="ico">⚠️</span>1100 שבורים</div>
+        <div class="kpi-value" id="kpi-broken-1100">—</div>
+        <div class="kpi-sub" id="kpi-broken-1100-sub">—</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span class="ico">🏠</span>כתובות עם שבורים</div>
+        <div class="kpi-value" id="kpi-addrs-broken">—</div>
+        <div class="kpi-sub">דורשות טיפול</div>
+      </div>
+    </div>
+
     <div class="grid-2">
       <div class="card">
         <div class="card-header">
@@ -1126,6 +1149,11 @@ table.tbl {
           <div class="ttl">ביצועי סוקרים</div>
           <div class="desc">טבלת דירוג וביצועים</div>
         </button>
+        <button class="export-card" onclick="exportBroken('xlsx')">
+          <span class="ico">⚠️</span>
+          <div class="ttl">פחים שבורים</div>
+          <div class="desc">דוח עדיפות לטיפול</div>
+        </button>
         <button class="export-card" onclick="exportFullReport()">
           <span class="ico">📘</span>
           <div class="ttl">דוח מלא (כל הגיליונות)</div>
@@ -1321,7 +1349,8 @@ function computeOverview() {
   const done = doneIds.length;
   const remaining = total - done;
 
-  let sum360 = 0, sum1100 = 0;
+  let sum360 = 0, sum1100 = 0, broken360 = 0, broken1100 = 0;
+  let addressesWithBroken = 0;
   const surveyorSet = new Set();
   let todayCount = 0;
   const today = todayKey();
@@ -1329,6 +1358,11 @@ function computeOverview() {
   for (const [id, r] of Object.entries(latestByAddr)) {
     sum360 += Number(r['פחי 360']) || 0;
     sum1100 += Number(r['פחי 1100']) || 0;
+    const b360 = Number(r['פחי 360 שבורים']) || 0;
+    const b1100 = Number(r['פחי 1100 שבורים']) || 0;
+    broken360 += b360;
+    broken1100 += b1100;
+    if (b360 + b1100 > 0) addressesWithBroken++;
   }
   for (const r of state.records) {
     if (r['סוקר']) surveyorSet.add(r['סוקר']);
@@ -1340,6 +1374,10 @@ function computeOverview() {
     pctDone: total ? (done / total) * 100 : 0,
     sum360, sum1100,
     sumBins: sum360 + sum1100,
+    broken360, broken1100,
+    sumBroken: broken360 + broken1100,
+    addressesWithBroken,
+    pctBroken: (sum360 + sum1100) > 0 ? ((broken360 + broken1100) / (sum360 + sum1100)) * 100 : 0,
     avg360: done ? sum360 / done : 0,
     avg1100: done ? sum1100 / done : 0,
     surveyorCount: surveyorSet.size,
@@ -1457,6 +1495,21 @@ function renderOverview() {
   $('#kpi-surveyors-sub').textContent = `תרמו סקירות`;
 
   $('#kpi-today').textContent = fmtNum(ov.todayCount);
+
+  // Broken bins KPIs
+  $('#kpi-broken-total').textContent = fmtNum(ov.sumBroken);
+  $('#kpi-broken-total-sub').innerHTML = ov.sumBins > 0
+    ? `<span style="color:var(--danger);font-weight:600;">${fmtPct(ov.pctBroken)}</span> מהפחים`
+    : '—';
+  $('#kpi-broken-360').textContent = fmtNum(ov.broken360);
+  $('#kpi-broken-360-sub').textContent = ov.sum360 > 0
+    ? fmtPct((ov.broken360 / ov.sum360) * 100) + ' מסה"כ 360'
+    : '—';
+  $('#kpi-broken-1100').textContent = fmtNum(ov.broken1100);
+  $('#kpi-broken-1100-sub').textContent = ov.sum1100 > 0
+    ? fmtPct((ov.broken1100 / ov.sum1100) * 100) + ' מסה"כ 1100'
+    : '—';
+  $('#kpi-addrs-broken').textContent = fmtNum(ov.addressesWithBroken);
 
   // Top surveyors
   const topSurv = computeSurveyorStats().slice(0, 5);
@@ -1882,6 +1935,10 @@ function renderRecordsTable() {
       av = (Number(a['פחי 360']) || 0) + (Number(a['פחי 1100']) || 0);
       bv = (Number(b['פחי 360']) || 0) + (Number(b['פחי 1100']) || 0);
     }
+    else if (srt.col === 'broken_total') {
+      av = (Number(a['פחי 360 שבורים']) || 0) + (Number(a['פחי 1100 שבורים']) || 0);
+      bv = (Number(b['פחי 360 שבורים']) || 0) + (Number(b['פחי 1100 שבורים']) || 0);
+    }
     else { av = a[srt.col] ?? ''; bv = b[srt.col] ?? ''; }
     if (av < bv) return srt.dir === 'asc' ? -1 : 1;
     if (av > bv) return srt.dir === 'asc' ? 1 : -1;
@@ -1915,6 +1972,7 @@ function renderRecordsTable() {
         <th class="${sortedCls('פחי 360')}" onclick="sortRecords('פחי 360')">360</th>
         <th class="${sortedCls('פחי 1100')}" onclick="sortRecords('פחי 1100')">1100</th>
         <th class="${sortedCls('bins_total')}" onclick="sortRecords('bins_total')">סה"כ</th>
+        <th class="${sortedCls('broken_total')}" onclick="sortRecords('broken_total')" title="פחים שבורים">⚠️</th>
         <th>תמונה</th>
         <th>הערות</th>
       </tr></thead>
@@ -1926,6 +1984,12 @@ function renderRecordsTable() {
 
 function recordTableRow(r) {
   const total = (Number(r['פחי 360']) || 0) + (Number(r['פחי 1100']) || 0);
+  const broken360 = Number(r['פחי 360 שבורים']) || 0;
+  const broken1100 = Number(r['פחי 1100 שבורים']) || 0;
+  const totalBroken = broken360 + broken1100;
+  const brokenCell = totalBroken > 0
+    ? `<span class="bin-pill" style="background:var(--warning-light);color:#8a6d10;" title="360: ${broken360} | 1100: ${broken1100}">⚠️ ${fmtNum(totalBroken)}</span>`
+    : '<span style="color:var(--text-dim)">—</span>';
   const imgs = getRecordImages(r);
   const imgCell = imgs.length
     ? `<a href="#" onclick="event.stopPropagation(); openAddressDetail('${escapeJs(r.address_id || '')}'); return false;" title="פתח פרטים">📷 ${imgs.length}</a>`
@@ -1942,6 +2006,7 @@ function recordTableRow(r) {
       <td><span class="bin-pill s360">${fmtNum(r['פחי 360'])}</span></td>
       <td><span class="bin-pill s1100">${fmtNum(r['פחי 1100'])}</span></td>
       <td><strong>${fmtNum(total)}</strong></td>
+      <td>${brokenCell}</td>
       <td>${imgCell}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r['הערות'] || '')}">${escapeHtml(r['הערות'] || '')}</td>
     </tr>`;
@@ -1950,7 +2015,7 @@ function recordTableRow(r) {
 function sortRecords(col) {
   const s = state.sort.records;
   if (s.col === col) s.dir = s.dir === 'asc' ? 'desc' : 'asc';
-  else { s.col = col; s.dir = (col === 'timestamp' || col === 'bins_total') ? 'desc' : 'asc'; }
+  else { s.col = col; s.dir = (col === 'timestamp' || col === 'bins_total' || col === 'broken_total') ? 'desc' : 'asc'; }
   renderRecordsTable();
 }
 
@@ -2041,6 +2106,9 @@ function exportRecords(format) {
     'פחי 360': r['פחי 360'] || 0,
     'פחי 1100': r['פחי 1100'] || 0,
     'סה"כ פחים': (Number(r['פחי 360']) || 0) + (Number(r['פחי 1100']) || 0),
+    'פחי 360 שבורים': r['פחי 360 שבורים'] || 0,
+    'פחי 1100 שבורים': r['פחי 1100 שבורים'] || 0,
+    'סה"כ שבורים': (Number(r['פחי 360 שבורים']) || 0) + (Number(r['פחי 1100 שבורים']) || 0),
     'הערות': r['הערות'] || '',
     'GPS lat': r.GPS_lat || '',
     'GPS lng': r.GPS_lng || '',
@@ -2061,6 +2129,9 @@ function exportRecordsFiltered() {
     'פחי 360': r['פחי 360'] || 0,
     'פחי 1100': r['פחי 1100'] || 0,
     'סה"כ': (Number(r['פחי 360']) || 0) + (Number(r['פחי 1100']) || 0),
+    'פחי 360 שבורים': r['פחי 360 שבורים'] || 0,
+    'פחי 1100 שבורים': r['פחי 1100 שבורים'] || 0,
+    'סה"כ שבורים': (Number(r['פחי 360 שבורים']) || 0) + (Number(r['פחי 1100 שבורים']) || 0),
     'הערות': r['הערות'] || '',
     'תמונה 1': r['תמונה_URL_1'] || '',
     'תמונה 2': r['תמונה_URL_2'] || '',
@@ -2082,7 +2153,9 @@ function exportAddresses(format) {
       'סוקר אחרון': r ? (r['סוקר'] || '') : '',
       'תאריך סקירה': r ? fmtDate(r.timestamp) : '',
       'פחי 360': r ? (r['פחי 360'] || 0) : '',
-      'פחי 1100': r ? (r['פחי 1100'] || 0) : ''
+      'פחי 1100': r ? (r['פחי 1100'] || 0) : '',
+      'פחי 360 שבורים': r ? (r['פחי 360 שבורים'] || 0) : '',
+      'פחי 1100 שבורים': r ? (r['פחי 1100 שבורים'] || 0) : ''
     };
   });
   downloadData(rows, 'כתובות', format);
@@ -2128,6 +2201,7 @@ function exportFullReport() {
   addSheet('סקירה כללית', [computeOverviewForSheet()]);
   addSheet('סקירות', prepareRecordsForSheet());
   addSheet('כתובות', prepareAddressesForSheet());
+  addSheet('פחים שבורים', prepareBrokenForSheet());
   addSheet('רחובות', prepareStreetsForSheet());
   addSheet('סוקרים', prepareSurveyorsForSheet());
   addSheet('שכונות', prepareNeighborhoodsForSheet());
@@ -2136,6 +2210,34 @@ function exportFullReport() {
   const filename = `ספירת_פחים_דוח_מלא_${todayKey()}.xlsx`;
   XLSX.writeFile(wb, filename);
   toast('הדוח הורד ✓', 'success');
+}
+
+/** רשימת כל הכתובות עם פחים שבורים - דוח עדיפות לטיפול. */
+function prepareBrokenForSheet() {
+  const latestByAddr = getLatestByAddress();
+  return Object.entries(latestByAddr)
+    .map(([id, r]) => {
+      const b360 = Number(r['פחי 360 שבורים']) || 0;
+      const b1100 = Number(r['פחי 1100 שבורים']) || 0;
+      return {
+        'ID': id,
+        'רחוב': r['שם רחוב'] || '',
+        'מספר בית': r['מספר בית'] || '',
+        'שכונה': r['שכונה'] || '',
+        'פחי 360 שבורים': b360,
+        'פחי 1100 שבורים': b1100,
+        'סה"כ שבורים': b360 + b1100,
+        'סוקר': r['סוקר'] || '',
+        'תאריך סקירה': fmtDate(r.timestamp),
+        'הערות': r['הערות'] || ''
+      };
+    })
+    .filter(row => row['סה"כ שבורים'] > 0)
+    .sort((a, b) => b['סה"כ שבורים'] - a['סה"כ שבורים']);
+}
+
+function exportBroken(format) {
+  downloadData(prepareBrokenForSheet(), 'פחים_שבורים', format || 'xlsx');
 }
 
 function computeOverviewForSheet() {
@@ -2150,6 +2252,11 @@ function computeOverviewForSheet() {
     'סה"כ פחים': ov.sumBins,
     'ממוצע 360 לכתובת': Math.round(ov.avg360 * 10) / 10,
     'ממוצע 1100 לכתובת': Math.round(ov.avg1100 * 10) / 10,
+    'פחי 360 שבורים': ov.broken360,
+    'פחי 1100 שבורים': ov.broken1100,
+    'סה"כ שבורים': ov.sumBroken,
+    'אחוז שבורים': fmtPct(ov.pctBroken),
+    'כתובות עם שבורים': ov.addressesWithBroken,
     'סוקרים פעילים': ov.surveyorCount,
     'סקירות היום': ov.todayCount,
     'תאריך הדוח': new Date().toLocaleDateString('he-IL')
@@ -2167,6 +2274,9 @@ function prepareRecordsForSheet() {
     'פחי 360': r['פחי 360'] || 0,
     'פחי 1100': r['פחי 1100'] || 0,
     'סה"כ פחים': (Number(r['פחי 360']) || 0) + (Number(r['פחי 1100']) || 0),
+    'פחי 360 שבורים': r['פחי 360 שבורים'] || 0,
+    'פחי 1100 שבורים': r['פחי 1100 שבורים'] || 0,
+    'סה"כ שבורים': (Number(r['פחי 360 שבורים']) || 0) + (Number(r['פחי 1100 שבורים']) || 0),
     'הערות': r['הערות'] || '',
     'GPS lat': r.GPS_lat || '',
     'GPS lng': r.GPS_lng || '',
@@ -2189,7 +2299,9 @@ function prepareAddressesForSheet() {
       'סוקר אחרון': r ? (r['סוקר'] || '') : '',
       'תאריך': r ? fmtDate(r.timestamp) : '',
       'פחי 360': r ? (r['פחי 360'] || 0) : '',
-      'פחי 1100': r ? (r['פחי 1100'] || 0) : ''
+      'פחי 1100': r ? (r['פחי 1100'] || 0) : '',
+      'פחי 360 שבורים': r ? (r['פחי 360 שבורים'] || 0) : '',
+      'פחי 1100 שבורים': r ? (r['פחי 1100 שבורים'] || 0) : ''
     };
   });
 }
@@ -2293,6 +2405,9 @@ function openAddressDetail(addressId) {
   const latest = records[0];
   const total360 = latest ? Number(latest['פחי 360']) || 0 : 0;
   const total1100 = latest ? Number(latest['פחי 1100']) || 0 : 0;
+  const broken360 = latest ? Number(latest['פחי 360 שבורים']) || 0 : 0;
+  const broken1100 = latest ? Number(latest['פחי 1100 שבורים']) || 0 : 0;
+  const totalBroken = broken360 + broken1100;
 
   let html = `
     <div style="text-align:center;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:16px;">
@@ -2302,6 +2417,7 @@ function openAddressDetail(addressId) {
         ${nbhd ? `<span class="badge teal">${escapeHtml(nbhd)}</span>` : ''}
         <span class="badge muted" style="font-family:monospace;">${escapeHtml(addressId)}</span>
         <span class="badge ${records.length > 0 ? 'success' : 'warning'}">${records.length > 0 ? 'נסקר' : 'לא נסקר'}</span>
+        ${totalBroken > 0 ? `<span class="badge danger">⚠️ ${totalBroken} שבורים</span>` : ''}
       </div>
     </div>`;
 
@@ -2310,8 +2426,8 @@ function openAddressDetail(addressId) {
       <div style="background:var(--teal-lighter);border-radius:10px;padding:14px;margin-bottom:16px;">
         <div style="font-size:11px;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px;">סקירה אחרונה</div>
         <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;">
-          <div><span class="bin-pill s360">פחי 360: ${fmtNum(total360)}</span></div>
-          <div><span class="bin-pill s1100">פחי 1100: ${fmtNum(total1100)}</span></div>
+          <div><span class="bin-pill s360">פחי 360: ${fmtNum(total360)}${broken360 > 0 ? ` (⚠️ ${broken360} שבורים)` : ''}</span></div>
+          <div><span class="bin-pill s1100">פחי 1100: ${fmtNum(total1100)}${broken1100 > 0 ? ` (⚠️ ${broken1100} שבורים)` : ''}</span></div>
           <div style="margin-right:auto;font-size:12px;color:var(--text-muted);">
             ${escapeHtml(latest['סוקר'] || '—')} · ${fmtDateTime(latest.timestamp)}
           </div>
@@ -2371,16 +2487,22 @@ function openAddressDetail(addressId) {
       <div>
         <div style="font-weight:700;margin-bottom:10px;color:var(--navy);">📋 היסטוריית סקירות (${records.length})</div>
         <div class="tbl-wrap"><table class="tbl" style="font-size:12px;">
-          <thead><tr><th>זמן</th><th>סוקר</th><th>360</th><th>1100</th><th>הערות</th></tr></thead>
+          <thead><tr><th>זמן</th><th>סוקר</th><th>360</th><th>1100</th><th title="פחים שבורים">⚠️</th><th>הערות</th></tr></thead>
           <tbody>
-            ${records.map((r, i) => `
+            ${records.map((r, i) => {
+              const b360 = Number(r['פחי 360 שבורים']) || 0;
+              const b1100 = Number(r['פחי 1100 שבורים']) || 0;
+              const bTotal = b360 + b1100;
+              return `
               <tr ${i === 0 ? 'style="background:var(--teal-lighter);"' : ''}>
                 <td>${fmtDateTime(r.timestamp)}${i === 0 ? ' <span class="badge success" style="font-size:10px;">אחרון</span>' : ''}</td>
                 <td>${escapeHtml(r['סוקר'] || '—')}</td>
                 <td>${fmtNum(r['פחי 360'])}</td>
                 <td>${fmtNum(r['פחי 1100'])}</td>
+                <td>${bTotal > 0 ? `<span style="color:#8a6d10;font-weight:600;">⚠️ ${bTotal}</span>` : '—'}</td>
                 <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r['הערות'] || '')}">${escapeHtml(r['הערות'] || '—')}</td>
-              </tr>`).join('')}
+              </tr>`;
+            }).join('')}
           </tbody>
         </table></div>
       </div>`;
