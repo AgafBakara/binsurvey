@@ -1095,6 +1095,62 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .save-bar .btn-primary { margin-top: 0; }
 .save-bar .btn-ghost { padding: 16px 20px; flex-shrink: 0; border: 1.5px solid var(--border); border-radius: var(--radius); }
 
+/* ============ DUPE WARNING MODAL ============ */
+.dupe-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 800;
+  padding: 20px;
+}
+.dupe-modal-backdrop.active { display: flex; animation: fade-in .2s; }
+.dupe-modal {
+  background: white;
+  border-radius: 20px;
+  max-width: 420px;
+  width: 100%;
+  padding: 28px 24px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  animation: dupe-modal-in .3s;
+}
+@keyframes dupe-modal-in { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.dupe-modal-icon { font-size: 48px; margin-bottom: 12px; }
+.dupe-modal-title { font-size: 20px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+.dupe-modal-address { font-size: 22px; font-weight: 800; color: var(--teal); margin: 12px 0 6px; }
+.dupe-modal-prior {
+  background: var(--warning-light);
+  color: #6b5200;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  margin: 12px 0;
+}
+.dupe-modal-actions { display: flex; flex-direction: column; gap: 10px; margin: 20px 0 12px; }
+.dupe-btn {
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .1s;
+  font-family: inherit;
+  border: none;
+}
+.dupe-btn.primary { background: var(--teal); color: white; box-shadow: 0 4px 14px rgba(43, 140, 126, 0.3); }
+.dupe-btn.primary:active { background: var(--teal-dark); transform: scale(.98); }
+.dupe-btn.muted {
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1.5px solid var(--border);
+}
+.dupe-btn.muted:active { background: var(--border); }
+.dupe-modal-hint { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+
 /* ============ TOAST ============ */
 .toast-container {
   position: fixed;
@@ -1493,6 +1549,27 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
+
+<!-- SAME-DAY DUPLICATE WARNING MODAL -->
+<div class="dupe-modal-backdrop" id="dupe-modal">
+  <div class="dupe-modal">
+    <div class="dupe-modal-icon">⚠️</div>
+    <div class="dupe-modal-title">כבר סקרת את הכתובת היום</div>
+    <div class="dupe-modal-address" id="dupe-address">—</div>
+    <div class="dupe-modal-prior" id="dupe-prior">—</div>
+    <div class="dupe-modal-actions">
+      <button class="dupe-btn primary" onclick="continueAsAdditional()">
+        המשך לסקירה חדשה — נקודה נוספת
+      </button>
+      <button class="dupe-btn muted" onclick="cancelDupe()">
+        חזור לרשימה
+      </button>
+    </div>
+    <div class="dupe-modal-hint">
+      💡 להוספת עדכון על כמויות שכבר סקרת - פנה למנהל
+    </div>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -2298,10 +2375,71 @@ function addNewAddressAndOpen() {
 /* ═══════════════════════════════════════════════════════════
    SURVEY DETAIL
    ═══════════════════════════════════════════════════════════ */
+/** בדיקה אם הסוקר הנוכחי כבר סקר את הכתובת היום. */
+function findMyPriorRecordToday(address_id) {
+  const today = new Date().toDateString();
+  const mine = state.records.filter(r =>
+    r.address_id === address_id &&
+    r['סוקר'] === state.surveyor &&
+    !r['נמחק'] &&
+    r.timestamp &&
+    new Date(r.timestamp).toDateString() === today
+  );
+  if (mine.length === 0) return null;
+  mine.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  return mine[0];
+}
+
+/** מציג התראה על סקירה קודמת של אותו סוקר באותו היום. */
+function showSameDayDupeWarning(addr, priorRecord) {
+  state._pendingDupeAddr = addr;
+
+  const c360 = Number(priorRecord['פחי 360']) || 0;
+  const c1100 = Number(priorRecord['פחי 1100']) || 0;
+  const b360 = Number(priorRecord['פחי 360 שבורים']) || 0;
+  const b1100 = Number(priorRecord['פחי 1100 שבורים']) || 0;
+  const time = new Date(priorRecord.timestamp).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+
+  const parts = [];
+  if (c360 > 0) parts.push(`${c360} × פחי 360`);
+  if (c1100 > 0) parts.push(`${c1100} × פחי 1100`);
+  if (b360 + b1100 > 0) parts.push(`⚠️ ${b360 + b1100} שבורים`);
+  const summary = parts.length > 0 ? parts.join(' · ') : 'אין פחים';
+
+  $('#dupe-address').textContent = `${addr['שם רחוב'] || ''} ${addr['מספר בית'] || ''}`;
+  $('#dupe-prior').innerHTML = `סקרת ב-${time}: <strong>${summary}</strong>`;
+  $('#dupe-modal').classList.add('active');
+}
+
+function continueAsAdditional() {
+  $('#dupe-modal').classList.remove('active');
+  const addr = state._pendingDupeAddr;
+  state._pendingDupeAddr = null;
+  state._skipDupeWarnFor = addr.address_id; // Don't ask again this session
+  if (addr) openSurveyReal(addr);
+}
+
+function cancelDupe() {
+  $('#dupe-modal').classList.remove('active');
+  state._pendingDupeAddr = null;
+  goToList();
+}
+
 function openSurvey(address_id) {
   const addr = state.addresses.find(a => a.address_id === address_id);
   if (!addr) { toast('כתובת לא נמצאה', 'error'); return; }
 
+  // בדיקה אם כבר סקרתי היום — אם כן, הצג התראה
+  const priorToday = findMyPriorRecordToday(address_id);
+  if (priorToday && !state._skipDupeWarnFor) {
+    showSameDayDupeWarning(addr, priorToday);
+    return;
+  }
+  state._skipDupeWarnFor = null;
+  openSurveyReal(addr);
+}
+
+function openSurveyReal(addr) {
   state.currentAddress = addr;
   state.currentPhotos = [];
   state.counts = { '360': 0, '1100': 0 };
