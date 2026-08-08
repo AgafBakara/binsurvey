@@ -727,6 +727,26 @@ table.tbl {
   .filter-input, .filter-select { min-width: 120px; font-size: 12px; }
 }
 
+/* QA action buttons */
+.qa-action-btn {
+  background: white;
+  border: 1.5px solid var(--border);
+  padding: 5px 9px;
+  font-size: 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin: 0 2px;
+  transition: all .1s;
+  font-family: inherit;
+}
+.qa-action-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.qa-action-btn.edit { color: var(--info); border-color: var(--info); }
+.qa-action-btn.edit:hover { background: var(--info-light); }
+.qa-action-btn.merge { color: var(--purple); border-color: var(--purple); }
+.qa-action-btn.merge:hover { background: var(--purple-light); }
+.qa-action-btn.delete { color: var(--danger); border-color: var(--danger); }
+.qa-action-btn.delete:hover { background: var(--danger-light); }
+
 /* Toast */
 .toast-box {
   position: fixed;
@@ -2085,6 +2105,7 @@ function renderRecordsTable() {
         <th class="${sortedCls('broken_total')}" onclick="sortRecords('broken_total')" title="פחים שבורים">⚠️</th>
         <th>תמונה</th>
         <th>הערות</th>
+        <th style="width:90px;">פעולות</th>
       </tr></thead>
       <tbody>${showRecs.map(recordTableRow).join('')}</tbody>
     </table>
@@ -2105,12 +2126,13 @@ function recordTableRow(r) {
     ? `<a href="#" onclick="event.stopPropagation(); openAddressDetail('${escapeJs(r.address_id || '')}'); return false;" title="פתח פרטים">📷 ${imgs.length}</a>`
     : '<span style="color:var(--text-dim)">—</span>';
   const color = state.surveyorColors[r['סוקר']] || 'var(--text)';
-  const clickAttr = r.address_id ? `onclick="openAddressDetail('${escapeJs(r.address_id)}')" style="cursor:pointer"` : '';
+  const audit = r['עודכן אחרון'];
+  const editedBadge = audit ? `<span title="${escapeHtml(String(audit))}" style="font-size:10px;color:var(--purple);">✏️</span>` : '';
   return `
-    <tr ${clickAttr}>
-      <td><span class="inline-mini">${fmtDateTime(r.timestamp)}</span></td>
-      <td><strong>${escapeHtml(r['שם רחוב'] || '—')}</strong></td>
-      <td><strong>${escapeHtml(String(r['מספר בית'] || ''))}</strong></td>
+    <tr>
+      <td><span class="inline-mini">${fmtDateTime(r.timestamp)}</span> ${editedBadge}</td>
+      <td onclick="openAddressDetail('${escapeJs(r.address_id || '')}')" style="cursor:pointer;"><strong>${escapeHtml(r['שם רחוב'] || '—')}</strong></td>
+      <td onclick="openAddressDetail('${escapeJs(r.address_id || '')}')" style="cursor:pointer;"><strong>${escapeHtml(String(r['מספר בית'] || ''))}</strong></td>
       <td>${r['שכונה'] ? '<span class="badge teal">' + escapeHtml(r['שכונה']) + '</span>' : '<span style="color:var(--text-dim)">—</span>'}</td>
       <td style="color:${color};font-weight:500">${escapeHtml(r['סוקר'] || '—')}</td>
       <td><span class="bin-pill s360">${fmtNum(r['פחי 360'])}</span></td>
@@ -2119,6 +2141,10 @@ function recordTableRow(r) {
       <td>${brokenCell}</td>
       <td>${imgCell}</td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r['הערות'] || '')}">${escapeHtml(r['הערות'] || '')}</td>
+      <td style="white-space:nowrap;">
+        <button class="qa-action-btn edit" onclick="openEditRecord('${escapeJs(r.record_id)}')" title="ערוך">✏️</button>
+        <button class="qa-action-btn delete" onclick="confirmDeleteRecord('${escapeJs(r.record_id)}', '${escapeJs((r['שם רחוב'] || '') + ' ' + (r['מספר בית'] || ''))}')" title="מחק">🗑️</button>
+      </td>
     </tr>`;
 }
 
@@ -2761,15 +2787,26 @@ function renderQADuplicates() {
       const b1100 = Number(r['פחי 1100 שבורים']) || 0;
       const bTotal = b360 + b1100;
       const color = state.surveyorColors[r['סוקר']] || 'var(--text)';
+      const audit = r['עודכן אחרון'];
       return `
         <tr>
-          <td><span class="inline-mini">${fmtDateTime(r.timestamp)}</span></td>
+          <td>
+            <span class="inline-mini">${fmtDateTime(r.timestamp)}</span>
+            ${audit ? `<div style="font-size:10px;color:var(--purple);margin-top:2px;" title="${escapeHtml(String(audit))}">✏️ נערך</div>` : ''}
+          </td>
           <td style="color:${color};font-weight:500">${escapeHtml(r['סוקר'] || '—')}</td>
           <td><span class="bin-pill s360">${fmtNum(r['פחי 360'])}</span></td>
           <td><span class="bin-pill s1100">${fmtNum(r['פחי 1100'])}</span></td>
           <td>${bTotal > 0 ? `<span style="color:#8a6d10;font-weight:600;">⚠️ ${bTotal}</span>` : '—'}</td>
           <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r['הערות'] || '')}">${escapeHtml(r['הערות'] || '—')}</td>
-          <td><button class="top-btn" style="background:var(--danger-light);color:var(--danger);padding:4px 10px;font-size:12px;" onclick="confirmDeleteRecord('${escapeJs(r.record_id)}', '${escapeJs(g.street + ' ' + g.number)}')">🗑️ מחק</button></td>
+          <td style="white-space:nowrap;">
+            <button class="qa-action-btn edit" onclick="openEditRecord('${escapeJs(r.record_id)}')" title="ערוך">✏️</button>
+            ${i === 0 && g.records.length >= 2
+              ? `<button class="qa-action-btn merge" onclick="openMergeDialog('${escapeJs(r.record_id)}', '${escapeJs(g.records[1].record_id)}', '${escapeJs(g.address_id)}')" title="מזג עם השנייה">🔗</button>`
+              : ''
+            }
+            <button class="qa-action-btn delete" onclick="confirmDeleteRecord('${escapeJs(r.record_id)}', '${escapeJs(g.street + ' ' + g.number)}')" title="מחק">🗑️</button>
+          </td>
         </tr>`;
     }).join('');
 
@@ -2788,7 +2825,7 @@ function renderQADuplicates() {
         <div class="tbl-wrap" style="background:white;border-radius:8px;">
           <table class="tbl" style="font-size:12px;">
             <thead><tr>
-              <th>זמן</th><th>סוקר</th><th>360</th><th>1100</th><th>⚠️</th><th>הערות</th><th></th>
+              <th>זמן</th><th>סוקר</th><th>360</th><th>1100</th><th>⚠️</th><th>הערות</th><th style="width:110px;">פעולות</th>
             </tr></thead>
             <tbody>${rowsHtml}</tbody>
           </table>
@@ -2870,6 +2907,210 @@ async function confirmRestoreRecord(recordId) {
     await refresh();
   } catch (err) {
     toast('שגיאה בשחזור: ' + err.message, 'error');
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   EDIT RECORD - עריכה ידנית של סקירה קיימת
+   ═══════════════════════════════════════════════════ */
+function openEditRecord(recordId) {
+  const r = (state._recordsAll || state.records).find(x => x.record_id === recordId);
+  if (!r) { toast('סקירה לא נמצאה', 'error'); return; }
+
+  const street = r['שם רחוב'] || '';
+  const num = r['מספר בית'] || '';
+  const nbhd = r['שכונה'] || '';
+  const n360 = Number(r['פחי 360']) || 0;
+  const n1100 = Number(r['פחי 1100']) || 0;
+  const b360 = Number(r['פחי 360 שבורים']) || 0;
+  const b1100 = Number(r['פחי 1100 שבורים']) || 0;
+  const notes = r['הערות'] || '';
+
+  const html = `
+    <div style="text-align:center;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <div style="font-size:13px;color:var(--text-muted);">עריכת סקירה</div>
+      <div style="font-size:20px;font-weight:800;color:var(--navy);margin:4px 0;">${escapeHtml(street)} ${escapeHtml(String(num))}</div>
+      <div style="font-size:12px;color:var(--text-muted);">
+        ${escapeHtml(r['סוקר'] || '')} · ${fmtDateTime(r.timestamp)}
+      </div>
+    </div>
+
+    <div style="background:var(--info-light);padding:10px 12px;border-radius:8px;font-size:12px;color:var(--info);margin-bottom:16px;">
+      ℹ️ ניתן לערוך רק תוכן. סוקר, זמן, GPS ותמונות נשמרים כמו שהם.
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:4px;">פחי 360</label>
+        <input type="number" id="edit-360" value="${n360}" min="0" class="filter-input" style="width:100%;font-size:16px;font-weight:600;text-align:center;">
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:4px;">פחי 1100</label>
+        <input type="number" id="edit-1100" value="${n1100}" min="0" class="filter-input" style="width:100%;font-size:16px;font-weight:600;text-align:center;">
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:#8a6d10;margin-bottom:4px;">⚠️ 360 שבורים</label>
+        <input type="number" id="edit-360-broken" value="${b360}" min="0" class="filter-input" style="width:100%;font-size:16px;font-weight:600;text-align:center;background:var(--warning-light);">
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:#8a6d10;margin-bottom:4px;">⚠️ 1100 שבורים</label>
+        <input type="number" id="edit-1100-broken" value="${b1100}" min="0" class="filter-input" style="width:100%;font-size:16px;font-weight:600;text-align:center;background:var(--warning-light);">
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:4px;">שכונה</label>
+      <input type="text" id="edit-neighborhood" value="${escapeHtml(nbhd)}" class="filter-input" style="width:100%;">
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:4px;">הערות</label>
+      <textarea id="edit-notes" class="filter-input" style="width:100%;min-height:70px;font-family:inherit;padding:10px;">${escapeHtml(notes)}</textarea>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="top-btn" onclick="closeModal()" style="background:var(--bg);color:var(--text);">ביטול</button>
+      <button class="top-btn primary" onclick="saveEditRecord('${escapeJs(recordId)}')" style="color:var(--navy);">שמור שינויים</button>
+    </div>
+  `;
+
+  openModal('עריכת סקירה', html);
+}
+
+async function saveEditRecord(recordId) {
+  const b360t = +$('#edit-360').value || 0;
+  const b1100t = +$('#edit-1100').value || 0;
+  const bb360 = +$('#edit-360-broken').value || 0;
+  const bb1100 = +$('#edit-1100-broken').value || 0;
+
+  if (bb360 > b360t) { toast('פחי 360 שבורים לא יכולים לעלות על סה"כ', 'error'); return; }
+  if (bb1100 > b1100t) { toast('פחי 1100 שבורים לא יכולים לעלות על סה"כ', 'error'); return; }
+
+  try {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'updateRecord',
+        record_id: recordId,
+        bins_360: b360t,
+        bins_1100: b1100t,
+        bins_360_broken: bb360,
+        bins_1100_broken: bb1100,
+        neighborhood: $('#edit-neighborhood').value.trim(),
+        notes: $('#edit-notes').value.trim(),
+        edited_by: 'admin'
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (data.changes === 0) {
+      toast('אין שינויים לשמור', 'warning');
+    } else {
+      toast(`הסקירה עודכנה ✓ (${data.changes} שינויים)`, 'success');
+    }
+    closeModal();
+    await refresh();
+  } catch (err) {
+    toast('שגיאה בעדכון: ' + err.message, 'error');
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   MERGE RECORDS - מיזוג שתי סקירות
+   ═══════════════════════════════════════════════════ */
+function openMergeDialog(keepId, mergeId, addressId) {
+  const all = state._recordsAll || state.records;
+  const keep = all.find(r => r.record_id === keepId);
+  const merge = all.find(r => r.record_id === mergeId);
+  if (!keep || !merge) { toast('סקירות לא נמצאו', 'error'); return; }
+
+  const n = (r, f) => Number(r[f]) || 0;
+  const sum360 = n(keep, 'פחי 360') + n(merge, 'פחי 360');
+  const sum1100 = n(keep, 'פחי 1100') + n(merge, 'פחי 1100');
+  const sumB360 = n(keep, 'פחי 360 שבורים') + n(merge, 'פחי 360 שבורים');
+  const sumB1100 = n(keep, 'פחי 1100 שבורים') + n(merge, 'פחי 1100 שבורים');
+
+  const notesKeep = String(keep['הערות'] || '').trim();
+  const notesMerge = String(merge['הערות'] || '').trim();
+  const combinedNotes = [notesKeep, notesMerge].filter(x => x).join(' | ');
+
+  const imgsKeep = getRecordImages(keep);
+  const imgsMerge = getRecordImages(merge);
+  const uniqueImgs = [...new Set([...imgsKeep, ...imgsMerge])].slice(0, 3);
+
+  const rowHtml = (r, label) => {
+    const b360 = n(r, 'פחי 360 שבורים');
+    const b1100 = n(r, 'פחי 1100 שבורים');
+    return `
+      <div style="background:var(--bg);border-radius:8px;padding:12px;">
+        <div style="font-size:11px;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px;">${label}</div>
+        <div style="font-weight:600;margin-bottom:4px;">${escapeHtml(r['סוקר'] || '—')} · ${fmtDateTime(r.timestamp)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+          <span class="bin-pill s360">360: ${fmtNum(n(r,'פחי 360'))}</span>
+          <span class="bin-pill s1100">1100: ${fmtNum(n(r,'פחי 1100'))}</span>
+          ${b360+b1100 > 0 ? `<span class="badge warning">⚠️ ${b360+b1100} שבורים</span>` : ''}
+        </div>
+        ${r['הערות'] ? `<div style="font-size:12px;color:var(--text-muted);">📝 ${escapeHtml(r['הערות'])}</div>` : ''}
+      </div>`;
+  };
+
+  const html = `
+    <div style="text-align:center;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <div style="font-size:13px;color:var(--text-muted);">מיזוג שתי סקירות</div>
+      <div style="font-size:20px;font-weight:800;color:var(--navy);margin:4px 0;">
+        ${escapeHtml(keep['שם רחוב'] || '')} ${escapeHtml(String(keep['מספר בית'] || ''))}
+      </div>
+    </div>
+
+    <div style="background:var(--info-light);padding:10px 12px;border-radius:8px;font-size:12px;color:var(--info);margin-bottom:16px;">
+      ℹ️ הכמויות ייוסכמו. הערות יצורפו. תמונות יאוחדו (עד 3). הסקירה השנייה תסומן כנמחקת (ניתן לשחזור).
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+      ${rowHtml(keep, 'סקירה 1 (נשמרת + מקבלת את הסכומים)')}
+      ${rowHtml(merge, 'סקירה 2 (תסומן כמוזגה)')}
+    </div>
+
+    <div style="background:var(--success-light);border:2px solid var(--success);border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--success);letter-spacing:.5px;margin-bottom:8px;font-weight:600;">➜ תוצאה סופית לאחר מיזוג</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+        <span class="bin-pill s360">360: ${fmtNum(sum360)}</span>
+        <span class="bin-pill s1100">1100: ${fmtNum(sum1100)}</span>
+        ${sumB360+sumB1100 > 0 ? `<span class="badge warning">⚠️ ${sumB360+sumB1100} שבורים (360:${sumB360}, 1100:${sumB1100})</span>` : ''}
+      </div>
+      ${combinedNotes ? `<div style="font-size:13px;color:var(--text);">📝 ${escapeHtml(combinedNotes)}</div>` : ''}
+      <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">📷 ${uniqueImgs.length} תמונות סופיות</div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="top-btn" onclick="closeModal()" style="background:var(--bg);color:var(--text);">ביטול</button>
+      <button class="top-btn primary" onclick="doMerge('${escapeJs(keepId)}', '${escapeJs(mergeId)}')" style="color:var(--navy);">🔗 בצע מיזוג</button>
+    </div>
+  `;
+
+  openModal('מיזוג סקירות', html);
+}
+
+async function doMerge(keepId, mergeId) {
+  try {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'mergeRecords',
+        keep_record_id: keepId,
+        merge_record_id: mergeId,
+        merged_by: 'admin'
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    toast('המיזוג הושלם ✓', 'success');
+    closeModal();
+    await refresh();
+  } catch (err) {
+    toast('שגיאה במיזוג: ' + err.message, 'error');
   }
 }
 
