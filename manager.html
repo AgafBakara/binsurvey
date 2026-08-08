@@ -284,6 +284,7 @@ a:hover { text-decoration: underline; }
 .kpi.navy::before { background: var(--navy); }
 .kpi.success::before { background: var(--success); }
 .kpi.warning::before { background: var(--warning); }
+.kpi.danger::before { background: var(--danger); }
 .kpi.purple::before { background: var(--purple); }
 
 .kpi-label {
@@ -822,8 +823,14 @@ table.tbl {
     <button class="tab" data-tab="trend" onclick="switchTab('trend')">
       <span class="tab-icon">📈</span>מגמות
     </button>
+    <button class="tab" data-tab="qa" onclick="switchTab('qa')">
+      <span class="tab-icon">🔍</span>בקרת איכות
+    </button>
     <button class="tab" data-tab="export" onclick="switchTab('export')">
       <span class="tab-icon">⬇</span>ייצוא
+    </button>
+    <button class="tab" data-tab="settings" onclick="switchTab('settings')">
+      <span class="tab-icon">⚙️</span>הגדרות
     </button>
   </div>
 </div>
@@ -1115,6 +1122,60 @@ table.tbl {
     </div>
   </div>
 
+  <!-- QA TAB -->
+  <div class="panel" id="panel-qa">
+    <div class="section-header">
+      <div>
+        <div class="section-title">בקרת איכות</div>
+        <div class="section-subtitle">זיהוי כפילויות, סקירות חשודות וניהול נמחקות</div>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi warning">
+        <div class="kpi-label"><span class="ico">🔁</span>כתובות עם כפילות</div>
+        <div class="kpi-value" id="kpi-dupe-addresses">—</div>
+        <div class="kpi-sub" id="kpi-dupe-addresses-sub">בטווח הימים שהוגדר</div>
+      </div>
+      <div class="kpi warning">
+        <div class="kpi-label"><span class="ico">⚠️</span>סקירות כפולות</div>
+        <div class="kpi-value" id="kpi-dupe-records">—</div>
+        <div class="kpi-sub">מתוכן דורשות בדיקה</div>
+      </div>
+      <div class="kpi danger">
+        <div class="kpi-label"><span class="ico">🔴</span>ספירות שונות</div>
+        <div class="kpi-value" id="kpi-dupe-mismatch">—</div>
+        <div class="kpi-sub">כפילויות עם ערכים שונים</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span class="ico">🗑️</span>סקירות נמחקות</div>
+        <div class="kpi-value" id="kpi-deleted">—</div>
+        <div class="kpi-sub" id="kpi-deleted-sub">soft-delete</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="ico">🔁</span>כתובות עם ספירה כפולה</div>
+        <div class="filter-group">
+          <label class="filter-label">
+            <input type="checkbox" id="qa-show-only-mismatch" onchange="renderQADuplicates()">
+            <span style="margin-right:4px;">רק כאלה עם פערים</span>
+          </label>
+        </div>
+      </div>
+      <div id="qa-duplicates-list"><div class="empty">טוען...</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="ico">🗑️</span>סקירות שנמחקו</div>
+        <button class="top-btn" onclick="renderQADeleted()">רענן</button>
+      </div>
+      <div id="qa-deleted-list"><div class="empty">אין סקירות שנמחקו</div></div>
+    </div>
+  </div>
+
   <!-- EXPORT TAB -->
   <div class="panel" id="panel-export">
     <div class="section-header">
@@ -1181,6 +1242,53 @@ table.tbl {
     </div>
   </div>
 
+  <!-- SETTINGS TAB -->
+  <div class="panel" id="panel-settings">
+    <div class="section-header">
+      <div>
+        <div class="section-title">הגדרות מערכת</div>
+        <div class="section-subtitle">פרמטרים ובחירות שמאוחסנים במכשיר שלך</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="ico">🔁</span>זיהוי כפילויות</div>
+      </div>
+
+      <div style="padding:6px 0;">
+        <label style="display:block;font-weight:600;margin-bottom:6px;">
+          טווח ימים לזיהוי סקירה כפולה
+        </label>
+        <div style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">
+          שתי סקירות של אותה כתובת בטווח הזה ייחשבו ככפילות שדורשת בדיקה.
+          מעל הטווח - ייחשב כסיבוב ספירה חדש (עדכון מכוון), לא כפילות.
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="number" id="settings-dupe-days" min="1" max="365" value="14"
+                 style="width:100px;padding:8px 12px;border:2px solid var(--border);border-radius:8px;font-size:16px;font-weight:600;text-align:center;"
+                 onchange="saveSetting('dupeDaysWindow', +this.value); renderQAPanel();">
+          <span style="color:var(--text-muted);">ימים</span>
+          <div style="margin-right:auto;display:flex;gap:6px;">
+            <button class="top-btn" onclick="setDupeWindow(7)">7 ימים</button>
+            <button class="top-btn" onclick="setDupeWindow(14)">14 ימים</button>
+            <button class="top-btn" onclick="setDupeWindow(30)">30 ימים</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="ico">💾</span>מטמון מקומי</div>
+      </div>
+      <div style="color:var(--text-muted);font-size:13px;margin-bottom:12px;">
+        ההגדרות והעדפות הרינדור נשמרות בדפדפן שלך בלבד. אין להן השפעה על שאר המשתמשים.
+      </div>
+      <button class="top-btn" onclick="clearAllSettings()" style="background:var(--danger-light);color:var(--danger);">🗑️ נקה הגדרות מקומיות</button>
+    </div>
+  </div>
+
 </div>
 
 <!-- MODAL -->
@@ -1223,7 +1331,8 @@ const state = {
   sort: { records: { col: 'timestamp', dir: 'desc' }, surveyors: { col: 'count', dir: 'desc' }, streets: { col: 'name', dir: 'asc' } },
   map: null,
   mapMarkers: [],
-  surveyorColors: {}
+  surveyorColors: {},
+  settings: { dupeDaysWindow: 14 } // will be overridden by loadSettings()
 };
 
 /* ═══════════════════════════════════════════════════
@@ -1298,7 +1407,8 @@ async function refresh() {
   try {
     const data = await apiGet('getBootstrap');
     state.addresses = data.addresses || [];
-    state.records = data.records || [];
+    state._recordsAll = data.records || [];
+    state.records = state._recordsAll.filter(r => !r['נמחק']);
     state.surveyors = data.surveyors || [];
     state.lastSync = new Date();
     assignSurveyorColors();
@@ -2512,6 +2622,258 @@ function openAddressDetail(addressId) {
 }
 
 /* ═══════════════════════════════════════════════════
+   SETTINGS (persisted in localStorage)
+   ═══════════════════════════════════════════════════ */
+const SETTINGS_KEY = 'binMgr_settings_v1';
+const DEFAULT_SETTINGS = {
+  dupeDaysWindow: 14
+};
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch { return { ...DEFAULT_SETTINGS }; }
+}
+
+function saveSetting(key, value) {
+  state.settings[key] = value;
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+  toast('הגדרה נשמרה ✓', 'success');
+}
+
+function setDupeWindow(days) {
+  $('#settings-dupe-days').value = days;
+  saveSetting('dupeDaysWindow', days);
+  renderQAPanel();
+}
+
+function clearAllSettings() {
+  if (!confirm('לנקות את כל ההגדרות המקומיות? המערכת תחזור לברירות מחדל.')) return;
+  localStorage.removeItem(SETTINGS_KEY);
+  state.settings = { ...DEFAULT_SETTINGS };
+  $('#settings-dupe-days').value = state.settings.dupeDaysWindow;
+  toast('הגדרות אופסו', 'success');
+  renderQAPanel();
+}
+
+/* ═══════════════════════════════════════════════════
+   QA - Duplicate detection
+   ═══════════════════════════════════════════════════ */
+
+/** מחזיר רק סקירות שלא נמחקו (בשימוש לחישובי QA). */
+function activeRecords() {
+  return (state._recordsAll || state.records).filter(r => !r['נמחק']);
+}
+
+function deletedRecords() {
+  return (state._recordsAll || []).filter(r => r['נמחק']);
+}
+
+/** קבוצות של סקירות בטווח הימים המוגדר (כפילויות בסבב הנוכחי). */
+function computeDuplicateGroups() {
+  const windowDays = state.settings.dupeDaysWindow || 14;
+  const cutoff = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+
+  // קבוצת לפי address_id, רק סקירות בטווח וללא מחיקה
+  const byAddr = {};
+  for (const r of activeRecords()) {
+    if (!r.address_id || !r.timestamp) continue;
+    const t = new Date(r.timestamp).getTime();
+    if (t < cutoff) continue;
+    if (!byAddr[r.address_id]) byAddr[r.address_id] = [];
+    byAddr[r.address_id].push(r);
+  }
+
+  // סנן רק כאלה עם 2+ סקירות
+  const groups = [];
+  for (const [addrId, recs] of Object.entries(byAddr)) {
+    if (recs.length < 2) continue;
+    recs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // בדוק אם הערכים תואמים
+    const first = recs[0];
+    const c360 = Number(first['פחי 360']) || 0;
+    const c1100 = Number(first['פחי 1100']) || 0;
+    const b360 = Number(first['פחי 360 שבורים']) || 0;
+    const b1100 = Number(first['פחי 1100 שבורים']) || 0;
+
+    const isMismatch = recs.some(r => (
+      (Number(r['פחי 360']) || 0) !== c360 ||
+      (Number(r['פחי 1100']) || 0) !== c1100 ||
+      (Number(r['פחי 360 שבורים']) || 0) !== b360 ||
+      (Number(r['פחי 1100 שבורים']) || 0) !== b1100
+    ));
+
+    groups.push({
+      address_id: addrId,
+      records: recs,
+      street: first['שם רחוב'],
+      number: first['מספר בית'],
+      isMismatch
+    });
+  }
+  return groups.sort((a, b) => {
+    // Mismatches first, then by newest activity
+    if (a.isMismatch !== b.isMismatch) return a.isMismatch ? -1 : 1;
+    return new Date(b.records[0].timestamp) - new Date(a.records[0].timestamp);
+  });
+}
+
+function renderQAPanel() {
+  renderQAKPIs();
+  renderQADuplicates();
+  renderQADeleted();
+}
+
+function renderQAKPIs() {
+  const groups = computeDuplicateGroups();
+  const totalDupeRecords = groups.reduce((sum, g) => sum + g.records.length, 0);
+  const mismatchCount = groups.filter(g => g.isMismatch).length;
+  const deleted = deletedRecords().length;
+  const windowDays = state.settings.dupeDaysWindow || 14;
+
+  $('#kpi-dupe-addresses').textContent = fmtNum(groups.length);
+  $('#kpi-dupe-addresses-sub').textContent = `בטווח ${windowDays} ימים אחרונים`;
+  $('#kpi-dupe-records').textContent = fmtNum(totalDupeRecords);
+  $('#kpi-dupe-mismatch').textContent = fmtNum(mismatchCount);
+  $('#kpi-deleted').textContent = fmtNum(deleted);
+  $('#kpi-deleted-sub').textContent = deleted > 0 ? 'ניתן לשחזור' : '—';
+}
+
+function renderQADuplicates() {
+  const groups = computeDuplicateGroups();
+  const onlyMismatch = $('#qa-show-only-mismatch')?.checked;
+  const filtered = onlyMismatch ? groups.filter(g => g.isMismatch) : groups;
+  const container = $('#qa-duplicates-list');
+
+  if (filtered.length === 0) {
+    container.innerHTML = groups.length === 0
+      ? '<div class="empty"><div class="ico">✓</div>אין כפילויות בטווח המוגדר</div>'
+      : '<div class="empty">כל הכפילויות תואמות (אין פערים)</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(g => {
+    const rowsHtml = g.records.map((r, i) => {
+      const b360 = Number(r['פחי 360 שבורים']) || 0;
+      const b1100 = Number(r['פחי 1100 שבורים']) || 0;
+      const bTotal = b360 + b1100;
+      const color = state.surveyorColors[r['סוקר']] || 'var(--text)';
+      return `
+        <tr>
+          <td><span class="inline-mini">${fmtDateTime(r.timestamp)}</span></td>
+          <td style="color:${color};font-weight:500">${escapeHtml(r['סוקר'] || '—')}</td>
+          <td><span class="bin-pill s360">${fmtNum(r['פחי 360'])}</span></td>
+          <td><span class="bin-pill s1100">${fmtNum(r['פחי 1100'])}</span></td>
+          <td>${bTotal > 0 ? `<span style="color:#8a6d10;font-weight:600;">⚠️ ${bTotal}</span>` : '—'}</td>
+          <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r['הערות'] || '')}">${escapeHtml(r['הערות'] || '—')}</td>
+          <td><button class="top-btn" style="background:var(--danger-light);color:var(--danger);padding:4px 10px;font-size:12px;" onclick="confirmDeleteRecord('${escapeJs(r.record_id)}', '${escapeJs(g.street + ' ' + g.number)}')">🗑️ מחק</button></td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div style="border:2px solid ${g.isMismatch ? 'var(--danger)' : 'var(--warning)'};border-radius:12px;padding:14px;margin-bottom:12px;background:${g.isMismatch ? 'var(--danger-light)' : 'var(--warning-light)'};">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <div style="font-size:16px;font-weight:700;color:var(--navy);">
+            ${escapeHtml(g.street)} ${escapeHtml(String(g.number))}
+          </div>
+          <span class="badge ${g.isMismatch ? 'danger' : 'warning'}">${g.records.length} סקירות</span>
+          ${g.isMismatch
+            ? '<span class="badge danger">⚠️ ערכים לא תואמים</span>'
+            : '<span class="badge success">ערכים תואמים</span>'}
+          <button class="top-btn" style="margin-right:auto;background:var(--surface);" onclick="openAddressDetail('${escapeJs(g.address_id)}')">פרטים מלאים ←</button>
+        </div>
+        <div class="tbl-wrap" style="background:white;border-radius:8px;">
+          <table class="tbl" style="font-size:12px;">
+            <thead><tr>
+              <th>זמן</th><th>סוקר</th><th>360</th><th>1100</th><th>⚠️</th><th>הערות</th><th></th>
+            </tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderQADeleted() {
+  const deleted = deletedRecords()
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const container = $('#qa-deleted-list');
+
+  if (deleted.length === 0) {
+    container.innerHTML = '<div class="empty">אין סקירות שנמחקו</div>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr>
+        <th>סקירה מקורית</th>
+        <th>כתובת</th>
+        <th>סוקר</th>
+        <th>360</th>
+        <th>1100</th>
+        <th>נמחק בתאריך</th>
+        <th></th>
+      </tr></thead>
+      <tbody>
+        ${deleted.map(r => `
+          <tr>
+            <td><span class="inline-mini">${fmtDateTime(r.timestamp)}</span></td>
+            <td><strong>${escapeHtml(r['שם רחוב'] || '')} ${escapeHtml(String(r['מספר בית'] || ''))}</strong></td>
+            <td>${escapeHtml(r['סוקר'] || '—')}</td>
+            <td><span class="bin-pill s360">${fmtNum(r['פחי 360'])}</span></td>
+            <td><span class="bin-pill s1100">${fmtNum(r['פחי 1100'])}</span></td>
+            <td><span class="inline-mini">${escapeHtml(String(r['נמחק'] || ''))}</span></td>
+            <td><button class="top-btn primary" style="padding:4px 10px;font-size:12px;color:var(--navy);" onclick="confirmRestoreRecord('${escapeJs(r.record_id)}')">↩ שחזר</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   Delete / Restore actions
+   ═══════════════════════════════════════════════════ */
+
+async function confirmDeleteRecord(recordId, addrLabel) {
+  if (!recordId) { toast('חסר מזהה סקירה', 'error'); return; }
+  if (!confirm(`למחוק את הסקירה עבור ${addrLabel}?\n\nהמחיקה רכה - ניתן לשחזר מהטאב "בקרת איכות".`)) return;
+
+  try {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'deleteRecord', record_id: recordId, deleted_by: 'admin' })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    toast('הסקירה נמחקה ✓', 'success');
+    await refresh();
+  } catch (err) {
+    toast('שגיאה במחיקה: ' + err.message, 'error');
+  }
+}
+
+async function confirmRestoreRecord(recordId) {
+  if (!confirm('לשחזר את הסקירה?')) return;
+  try {
+    const res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'restoreRecord', record_id: recordId })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    toast('הסקירה שוחזרה ✓', 'success');
+    await refresh();
+  } catch (err) {
+    toast('שגיאה בשחזור: ' + err.message, 'error');
+  }
+}
+
+/* ═══════════════════════════════════════════════════
    TAB SWITCHING
    ═══════════════════════════════════════════════════ */
 function switchTab(name) {
@@ -2520,6 +2882,10 @@ function switchTab(name) {
   // Leaflet needs to recalculate size when container becomes visible
   if (name === 'map' && state.map) {
     setTimeout(() => { state.map.invalidateSize(); if (state.mapMarkers.length === 0) renderMap(); }, 100);
+  }
+  if (name === 'qa') renderQAPanel();
+  if (name === 'settings') {
+    $('#settings-dupe-days').value = state.settings.dupeDaysWindow;
   }
   window.scrollTo(0, 0);
 }
@@ -2533,7 +2899,8 @@ function renderAll() {
   renderGeography();
   renderRecordsTable();
   renderTrend();
-  // Map renders only when tab activated
+  // QA & Map render only when tab activated
+  if ($('#panel-qa').classList.contains('active')) renderQAPanel();
   if ($('#panel-map').classList.contains('active')) renderMap();
 }
 
@@ -2541,6 +2908,11 @@ function renderAll() {
    INIT
    ═══════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
+  // Load settings from localStorage
+  state.settings = loadSettings();
+  const dupeInput = $('#settings-dupe-days');
+  if (dupeInput) dupeInput.value = state.settings.dupeDaysWindow;
+
   $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
