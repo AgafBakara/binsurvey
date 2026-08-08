@@ -2415,8 +2415,10 @@ function continueAsAdditional() {
   $('#dupe-modal').classList.remove('active');
   const addr = state._pendingDupeAddr;
   state._pendingDupeAddr = null;
-  state._skipDupeWarnFor = addr.address_id; // Don't ask again this session
-  if (addr) openSurveyReal(addr);
+  if (addr) {
+    state._skipDupeWarnFor = addr.address_id; // Don't ask again this session
+    openSurveyReal(addr);
+  }
 }
 
 function cancelDupe() {
@@ -2468,7 +2470,7 @@ function openSurveyReal(addr) {
 
   // Prior records
   const map = buildSurveyStatusMap();
-  const st = map[address_id];
+  const st = map[addr.address_id];
   const prior = $('#detail-prior');
   if (st && (st.lastDate || st.pending)) {
     let txt = '';
