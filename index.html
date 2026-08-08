@@ -560,6 +560,47 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 .detail-prior-records strong { font-weight: 600; }
 
+.new-address-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, var(--gold-light) 0%, #fef7d9 100%);
+  border: 2px solid var(--gold);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  box-shadow: 0 3px 10px rgba(198, 166, 54, .15);
+  animation: banner-in .4s ease;
+}
+@keyframes banner-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.new-address-banner.hidden { display: none; }
+.new-address-icon {
+  width: 44px; height: 44px;
+  background: var(--gold);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(198, 166, 54, .4);
+}
+.new-address-body { flex: 1; text-align: right; }
+.new-address-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #6b5200;
+}
+.new-address-hint {
+  font-size: 12px;
+  color: #8a7222;
+  margin-top: 2px;
+}
+
 .section-card {
   background: var(--surface);
   border-radius: var(--radius);
@@ -1286,6 +1327,14 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   <div class="container">
 
     <button class="btn-ghost" onclick="goToList()" style="margin-bottom:8px;">→ חזרה לרשימה</button>
+
+    <div id="new-address-banner" class="new-address-banner hidden">
+      <div class="new-address-icon">✨</div>
+      <div class="new-address-body">
+        <div class="new-address-title">כתובת חדשה שהוספת</div>
+        <div class="new-address-hint" id="new-address-hint">תישמר לרשימת הכתובות עם השמירה</div>
+      </div>
+    </div>
 
     <div class="detail-header">
       <div class="detail-street" id="detail-street">—</div>
@@ -2269,6 +2318,16 @@ function openSurvey(address_id) {
   $('#detail-number').textContent = addr['מספר בית'] || '';
   $('#detail-id').textContent = `ID: ${addr.address_id}`;
 
+  // ✨ Banner - only for addresses that were manually added (not in master list)
+  const newBanner = $('#new-address-banner');
+  if (addr._isNew) {
+    $('#new-address-hint').textContent =
+      `${addr['שם רחוב']} ${addr['מספר בית']} — תישמר לרשימה עם השמירה`;
+    newBanner.classList.remove('hidden');
+  } else {
+    newBanner.classList.add('hidden');
+  }
+
   // Prior records
   const map = buildSurveyStatusMap();
   const st = map[address_id];
@@ -2542,6 +2601,7 @@ async function saveSurvey() {
       bins_360_broken:  state.broken['360'],
       bins_1100_broken: state.broken['1100'],
       notes:        notes,
+      is_new_address: addr._isNew ? true : false,
       images_base64: state.currentPhotos.slice(0, MAX_PHOTOS),
       gps_lat:      state.currentGps?.lat || '',
       gps_lng:      state.currentGps?.lng || ''
@@ -2558,8 +2618,15 @@ async function saveSurvey() {
 
     // Mark locally so the "next" screen knows current is done (optimistic)
     const savedAddr = addr;
+    const wasNew = addr._isNew;
 
-    toast('נשמר ✓', 'success');
+    // Once saved, address is no longer "new" - the record exists in the system
+    if (wasNew) {
+      delete addr._isNew;
+      toast(`✨ ${addr['שם רחוב']} ${addr['מספר בית']} - כתובת חדשה נוספה ונשמרה ✓`, 'success');
+    } else {
+      toast('נשמר ✓', 'success');
+    }
 
     // Reset button state (success path - fix for stuck "שומר..." state)
     btn.disabled = false;
