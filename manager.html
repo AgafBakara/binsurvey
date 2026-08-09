@@ -1177,13 +1177,29 @@ table.tbl {
     <div class="card">
       <div class="card-header">
         <div class="card-title"><span class="ico">🔁</span>כתובות עם ספירה כפולה</div>
+        <button class="top-btn primary" onclick="exportQADuplicates()" style="color:var(--navy);">📥 ייצא דוח לרכז</button>
+      </div>
+
+      <div class="filter-bar" style="margin-bottom:14px;">
         <div class="filter-group">
-          <label class="filter-label">
-            <input type="checkbox" id="qa-show-only-mismatch" onchange="renderQADuplicates()">
+          <span class="filter-label">רכז:</span>
+          <select class="filter-select" id="qa-filter-surveyor" onchange="renderQAPanel()">
+            <option value="">כל הרכזים</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">רחוב:</span>
+          <input type="text" class="filter-input" id="qa-filter-street" placeholder="חפש רחוב..." oninput="renderQAKPIs(); renderQADuplicates();">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" style="cursor:pointer;">
+            <input type="checkbox" id="qa-show-only-mismatch" onchange="renderQAKPIs(); renderQADuplicates();">
             <span style="margin-right:4px;">רק כאלה עם פערים</span>
           </label>
         </div>
+        <div style="margin-right:auto;color:var(--text-muted);font-size:12px;" id="qa-filter-count"></div>
       </div>
+
       <div id="qa-duplicates-list"><div class="empty">טוען...</div></div>
     </div>
 
@@ -2748,20 +2764,59 @@ function computeDuplicateGroups() {
 }
 
 function renderQAPanel() {
+  populateQASurveyorDropdown();
   renderQAKPIs();
   renderQADuplicates();
   renderQADeleted();
 }
 
-function renderQAKPIs() {
+/** מלא את בורר הרכזים בסינון עם השמות שקיימים בכפילויות. */
+function populateQASurveyorDropdown() {
+  const sel = $('#qa-filter-surveyor');
+  if (!sel) return;
   const groups = computeDuplicateGroups();
+  const surveyors = new Set();
+  for (const g of groups) {
+    for (const r of g.records) {
+      if (r['סוקר']) surveyors.add(r['סוקר']);
+    }
+  }
+  const sorted = [...surveyors].sort((a, b) => a.localeCompare(b, 'he'));
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">כל הרכזים</option>' +
+    sorted.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  sel.value = prev;
+}
+
+/** מיישם את הסינון של רכז + רחוב + mismatch-only. */
+function getFilteredDuplicateGroups() {
+  const groups = computeDuplicateGroups();
+  const surveyor = ($('#qa-filter-surveyor')?.value || '').trim();
+  const street = ($('#qa-filter-street')?.value || '').trim().toLowerCase();
+  const onlyMismatch = $('#qa-show-only-mismatch')?.checked;
+
+  return groups.filter(g => {
+    if (surveyor && !g.records.some(r => r['סוקר'] === surveyor)) return false;
+    if (street && !String(g.street || '').toLowerCase().includes(street)) return false;
+    if (onlyMismatch && !g.isMismatch) return false;
+    return true;
+  });
+}
+
+function renderQAKPIs() {
+  const groupsAll = computeDuplicateGroups();
+  const groups = getFilteredDuplicateGroups();
   const totalDupeRecords = groups.reduce((sum, g) => sum + g.records.length, 0);
   const mismatchCount = groups.filter(g => g.isMismatch).length;
   const deleted = deletedRecords().length;
   const windowDays = state.settings.dupeDaysWindow || 14;
+  const surveyor = ($('#qa-filter-surveyor')?.value || '').trim();
+  const filterLabel = surveyor ? ` (${surveyor})` : '';
 
   $('#kpi-dupe-addresses').textContent = fmtNum(groups.length);
-  $('#kpi-dupe-addresses-sub').textContent = `בטווח ${windowDays} ימים אחרונים`;
+  $('#kpi-dupe-addresses-sub').textContent = surveyor
+    ? `${surveyor} · מתוך ${fmtNum(groupsAll.length)} כלליות`
+    : `בטווח ${windowDays} ימים אחרונים`;
   $('#kpi-dupe-records').textContent = fmtNum(totalDupeRecords);
   $('#kpi-dupe-mismatch').textContent = fmtNum(mismatchCount);
   $('#kpi-deleted').textContent = fmtNum(deleted);
@@ -2770,14 +2825,20 @@ function renderQAKPIs() {
 
 function renderQADuplicates() {
   const groups = computeDuplicateGroups();
-  const onlyMismatch = $('#qa-show-only-mismatch')?.checked;
-  const filtered = onlyMismatch ? groups.filter(g => g.isMismatch) : groups;
+  const filtered = getFilteredDuplicateGroups();
   const container = $('#qa-duplicates-list');
+  const countEl = $('#qa-filter-count');
+
+  if (countEl) {
+    countEl.textContent = filtered.length === groups.length
+      ? `${fmtNum(groups.length)} כפילויות`
+      : `מציג ${fmtNum(filtered.length)} מתוך ${fmtNum(groups.length)} כפילויות`;
+  }
 
   if (filtered.length === 0) {
     container.innerHTML = groups.length === 0
       ? '<div class="empty"><div class="ico">✓</div>אין כפילויות בטווח המוגדר</div>'
-      : '<div class="empty">כל הכפילויות תואמות (אין פערים)</div>';
+      : '<div class="empty">אין כפילויות התואמות לסינון הנוכחי</div>';
     return;
   }
 
@@ -2832,6 +2893,105 @@ function renderQADuplicates() {
         </div>
       </div>`;
   }).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   ייצוא דוח לרכז - Excel עם הכפילויות המסוננות
+   ═══════════════════════════════════════════════════ */
+function exportQADuplicates() {
+  const filtered = getFilteredDuplicateGroups();
+  if (filtered.length === 0) {
+    toast('אין כפילויות לייצא (סנן משהו קודם)', 'warning');
+    return;
+  }
+
+  const surveyor = ($('#qa-filter-surveyor')?.value || '').trim();
+  const street = ($('#qa-filter-street')?.value || '').trim();
+
+  // בונה שורה אחת לזוג - ראשונה ליד שנייה
+  const rows = [];
+  for (const g of filtered) {
+    const r1 = g.records[0];
+    const r2 = g.records[1];
+    const img1 = getRecordImages(r1);
+    const img2 = r2 ? getRecordImages(r2) : [];
+
+    const num = (r, f) => Number(r?.[f]) || 0;
+    const diff360 = r2 ? num(r1, 'פחי 360') - num(r2, 'פחי 360') : '';
+    const diff1100 = r2 ? num(r1, 'פחי 1100') - num(r2, 'פחי 1100') : '';
+
+    rows.push({
+      'סטטוס': g.isMismatch ? '⚠️ פערים' : 'תואם',
+      'רחוב': g.street || '',
+      'מספר בית': g.number || '',
+      'מספר סקירות': g.records.length,
+
+      // Sighting 1
+      'סקירה 1 - זמן':    fmtDateTime(r1.timestamp),
+      'סקירה 1 - רכז':    r1['סוקר'] || '',
+      'סקירה 1 - 360':    num(r1, 'פחי 360'),
+      'סקירה 1 - 1100':   num(r1, 'פחי 1100'),
+      'סקירה 1 - 360 שבורים':  num(r1, 'פחי 360 שבורים'),
+      'סקירה 1 - 1100 שבורים': num(r1, 'פחי 1100 שבורים'),
+      'סקירה 1 - הערות':  r1['הערות'] || '',
+      'סקירה 1 - תמונה 1': img1[0] || '',
+      'סקירה 1 - תמונה 2': img1[1] || '',
+      'סקירה 1 - תמונה 3': img1[2] || '',
+
+      // Sighting 2
+      'סקירה 2 - זמן':    r2 ? fmtDateTime(r2.timestamp) : '',
+      'סקירה 2 - רכז':    r2 ? (r2['סוקר'] || '') : '',
+      'סקירה 2 - 360':    r2 ? num(r2, 'פחי 360') : '',
+      'סקירה 2 - 1100':   r2 ? num(r2, 'פחי 1100') : '',
+      'סקירה 2 - 360 שבורים':  r2 ? num(r2, 'פחי 360 שבורים') : '',
+      'סקירה 2 - 1100 שבורים': r2 ? num(r2, 'פחי 1100 שבורים') : '',
+      'סקירה 2 - הערות':  r2 ? (r2['הערות'] || '') : '',
+      'סקירה 2 - תמונה 1': img2[0] || '',
+      'סקירה 2 - תמונה 2': img2[1] || '',
+      'סקירה 2 - תמונה 3': img2[2] || '',
+
+      // Differences
+      'פער 360':  diff360,
+      'פער 1100': diff1100,
+
+      // Filled in the field by the coordinator
+      'החלטת רכז': '',
+      'ערך נכון 360':  '',
+      'ערך נכון 1100': ''
+    });
+  }
+
+  // שם קובץ מותאם לפי הסינון
+  let filename = 'דוח_כפילויות';
+  if (surveyor) filename += '_' + surveyor;
+  if (street)   filename += '_' + street;
+  filename += '_' + todayKey() + '.xlsx';
+  // מנקה תווים בעייתיים לשמות קבצים
+  filename = filename.replace(/[/\\?%*:|"<>]/g, '-');
+
+  // בונה חוברת עבודה עם סיכום בעמוד ראשון + פרטים בעמוד שני
+  const wb = XLSX.utils.book_new();
+
+  const summary = [{
+    'תאריך הדוח': new Date().toLocaleDateString('he-IL'),
+    'רכז שנבחר': surveyor || '(כל הרכזים)',
+    'רחוב שנבחר': street || '(כל הרחובות)',
+    'סה"כ כפילויות בדוח': filtered.length,
+    'מתוכן עם פערים': filtered.filter(g => g.isMismatch).length,
+    'מתוכן תואמות': filtered.filter(g => !g.isMismatch).length,
+    'טווח ימים לזיהוי': state.settings.dupeDaysWindow + ' ימים'
+  }];
+
+  const wsSummary = XLSX.utils.json_to_sheet(summary);
+  wsSummary['!rtl'] = true;
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'סיכום');
+
+  const wsData = XLSX.utils.json_to_sheet(rows);
+  wsData['!rtl'] = true;
+  XLSX.utils.book_append_sheet(wb, wsData, 'כפילויות');
+
+  XLSX.writeFile(wb, filename);
+  toast(`דוח הורד ✓ (${filtered.length} כפילויות)`, 'success');
 }
 
 function renderQADeleted() {
