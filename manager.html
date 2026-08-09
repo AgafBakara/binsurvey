@@ -747,6 +747,182 @@ table.tbl {
 .qa-action-btn.delete { color: var(--danger); border-color: var(--danger); }
 .qa-action-btn.delete:hover { background: var(--danger-light); }
 
+/* ═══════════════════════════════════════════════════
+   PRINT / PDF STYLES
+   Print container is hidden on screen, visible only in print
+   ═══════════════════════════════════════════════════ */
+.print-only {
+  display: none;
+}
+
+@page {
+  size: A4;
+  margin: 15mm 12mm;
+}
+
+@media print {
+  /* Hide everything except the print container */
+  body > *:not(#print-container) {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    font-size: 11pt;
+  }
+  .print-only {
+    display: block !important;
+    direction: rtl;
+    font-family: 'Heebo', sans-serif;
+    color: #1f2937;
+    font-size: 11pt;
+    line-height: 1.4;
+  }
+
+  .print-header {
+    text-align: center;
+    padding-bottom: 12pt;
+    margin-bottom: 16pt;
+    border-bottom: 2pt solid #152350;
+  }
+  .print-header .title {
+    font-size: 22pt;
+    font-weight: 800;
+    color: #152350;
+    margin-bottom: 4pt;
+  }
+  .print-header .subtitle {
+    font-size: 12pt;
+    color: #6b7280;
+    margin-bottom: 6pt;
+  }
+  .print-header .meta {
+    font-size: 10pt;
+    color: #6b7280;
+  }
+
+  .print-summary {
+    background: #f5f7fa;
+    padding: 10pt 14pt;
+    border-radius: 6pt;
+    margin-bottom: 16pt;
+    font-size: 11pt;
+    border: 0.5pt solid #cbd5e1;
+    page-break-inside: avoid;
+  }
+  .print-summary strong {
+    color: #152350;
+  }
+  .print-summary .pill {
+    display: inline-block;
+    padding: 2pt 8pt;
+    border-radius: 99pt;
+    font-size: 10pt;
+    font-weight: 600;
+    margin: 0 2pt;
+  }
+  .print-summary .pill.mismatch { background: #fee2e2; color: #dc2626; }
+  .print-summary .pill.match    { background: #dcfce7; color: #16a34a; }
+
+  .print-card {
+    border: 1pt solid #cbd5e1;
+    border-radius: 6pt;
+    padding: 10pt 12pt;
+    margin-bottom: 12pt;
+    page-break-inside: avoid;
+    background: white;
+  }
+  .print-card.mismatch {
+    border-color: #dc2626;
+    border-width: 1.5pt;
+    background: #fef7f7;
+  }
+  .print-card.match {
+    border-color: #eab308;
+    background: #fffbeb;
+  }
+
+  .print-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8pt;
+    padding-bottom: 6pt;
+    border-bottom: 0.5pt solid #cbd5e1;
+  }
+  .print-card-header .addr {
+    font-size: 14pt;
+    font-weight: 700;
+    color: #152350;
+  }
+  .print-card-header .status {
+    font-size: 10pt;
+    font-weight: 600;
+  }
+  .print-card-header .status.mismatch { color: #dc2626; }
+  .print-card-header .status.match    { color: #8a6d10; }
+
+  .print-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+  }
+  .print-tbl th {
+    background: #f5f7fa;
+    padding: 4pt 6pt;
+    text-align: right;
+    font-weight: 700;
+    font-size: 9pt;
+    color: #6b7280;
+    border-bottom: 0.5pt solid #cbd5e1;
+  }
+  .print-tbl td {
+    padding: 5pt 6pt;
+    border-bottom: 0.5pt solid #e1e5eb;
+    text-align: right;
+  }
+  .print-tbl tr:last-child td { border-bottom: none; }
+  .print-tbl .num { font-weight: 700; text-align: center; }
+  .print-tbl .diff { color: #dc2626; font-weight: 700; }
+
+  .print-decision {
+    margin-top: 8pt;
+    padding: 6pt 8pt;
+    background: #f5f7fa;
+    border-radius: 4pt;
+    font-size: 10pt;
+  }
+  .print-decision .row {
+    display: flex;
+    align-items: center;
+    gap: 8pt;
+    margin: 3pt 0;
+  }
+  .print-decision label {
+    font-weight: 600;
+    color: #6b7280;
+    min-width: 90pt;
+  }
+  .print-decision .line {
+    flex: 1;
+    border-bottom: 0.75pt solid #94a3b8;
+    height: 14pt;
+  }
+
+  .print-footer {
+    margin-top: 20pt;
+    padding-top: 8pt;
+    border-top: 1pt solid #cbd5e1;
+    text-align: center;
+    font-size: 9pt;
+    color: #9ca3af;
+  }
+
+  /* Force page break before every 3rd card to avoid orphans */
+  .print-card:nth-child(3n+4) {
+    page-break-before: auto;
+  }
+}
+
 /* Toast */
 .toast-box {
   position: fixed;
@@ -1177,7 +1353,10 @@ table.tbl {
     <div class="card">
       <div class="card-header">
         <div class="card-title"><span class="ico">🔁</span>כתובות עם ספירה כפולה</div>
-        <button class="top-btn primary" onclick="exportQADuplicates()" style="color:var(--navy);">📥 ייצא דוח לרכז</button>
+        <div style="display:flex;gap:8px;">
+          <button class="top-btn primary" onclick="printQAReport()" style="color:var(--navy);">🖨️ הדפס / שמור PDF</button>
+          <button class="top-btn" onclick="exportQADuplicates()">📥 XLSX</button>
+        </div>
       </div>
 
       <div class="filter-bar" style="margin-bottom:14px;">
@@ -1339,6 +1518,9 @@ table.tbl {
 </div>
 
 <div class="toast-box" id="toasts"></div>
+
+<!-- Print-only container - populated on demand by printQAReport() -->
+<div id="print-container" class="print-only"></div>
 
 <script>
 'use strict';
@@ -2893,6 +3075,146 @@ function renderQADuplicates() {
         </div>
       </div>`;
   }).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   הדפסה / שמירה כ-PDF - דוח מותאם A4 לרכז
+   ═══════════════════════════════════════════════════ */
+function printQAReport() {
+  const filtered = getFilteredDuplicateGroups();
+  if (filtered.length === 0) {
+    toast('אין כפילויות להדפסה (סנן משהו קודם)', 'warning');
+    return;
+  }
+
+  const surveyor = ($('#qa-filter-surveyor')?.value || '').trim();
+  const street = ($('#qa-filter-street')?.value || '').trim();
+  const onlyMismatch = $('#qa-show-only-mismatch')?.checked;
+
+  const mismatchCount = filtered.filter(g => g.isMismatch).length;
+  const matchCount = filtered.length - mismatchCount;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('he-IL', { year: 'numeric', month: 'long', day: 'numeric' });
+  const timeStr = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+
+  // Header + summary
+  let html = `
+    <div class="print-header">
+      <div class="title">דוח כפילויות ספירת פחים</div>
+      <div class="subtitle">עיריית בני ברק · אגף בקרה</div>
+      <div class="meta">הופק ב-${escapeHtml(dateStr)}, ${escapeHtml(timeStr)}</div>
+    </div>
+
+    <div class="print-summary">
+      <div style="margin-bottom:6pt;">
+        <strong>רכז:</strong> ${escapeHtml(surveyor || 'כל הרכזים')}
+        ${street ? ` &nbsp;·&nbsp; <strong>רחוב:</strong> ${escapeHtml(street)}` : ''}
+        &nbsp;·&nbsp; <strong>טווח:</strong> ${state.settings.dupeDaysWindow} ימים אחרונים
+        ${onlyMismatch ? ' &nbsp;·&nbsp; <strong>מציג:</strong> רק כאלה עם פערים' : ''}
+      </div>
+      <div>
+        <strong>סה"כ בדוח:</strong> ${filtered.length} כפילויות &nbsp;
+        <span class="pill mismatch">⚠️ ${mismatchCount} עם פערים</span>
+        <span class="pill match">✓ ${matchCount} תואמות</span>
+      </div>
+    </div>
+  `;
+
+  // Cards for each duplicate group
+  html += filtered.map((g, idx) => {
+    const n = (r, f) => Number(r[f]) || 0;
+
+    const rowsHtml = g.records.map(r => {
+      const b360 = n(r, 'פחי 360 שבורים');
+      const b1100 = n(r, 'פחי 1100 שבורים');
+      const bTotal = b360 + b1100;
+      return `
+        <tr>
+          <td>${fmtDateTime(r.timestamp)}</td>
+          <td>${escapeHtml(r['סוקר'] || '—')}</td>
+          <td class="num">${fmtNum(n(r, 'פחי 360'))}</td>
+          <td class="num">${fmtNum(n(r, 'פחי 1100'))}</td>
+          <td class="num">${bTotal > 0 ? '⚠️ ' + bTotal : '—'}</td>
+          <td>${escapeHtml(r['הערות'] || '—')}</td>
+        </tr>`;
+    }).join('');
+
+    // Diff row if mismatch
+    let diffRow = '';
+    if (g.isMismatch && g.records.length >= 2) {
+      const r1 = g.records[0], r2 = g.records[1];
+      const d360 = n(r1, 'פחי 360') - n(r2, 'פחי 360');
+      const d1100 = n(r1, 'פחי 1100') - n(r2, 'פחי 1100');
+      const parts = [];
+      if (d360 !== 0) parts.push(`פחי 360: פער ${Math.abs(d360)}`);
+      if (d1100 !== 0) parts.push(`פחי 1100: פער ${Math.abs(d1100)}`);
+      if (parts.length) {
+        diffRow = `<tr><td colspan="6" style="background:#fef7f7;color:#dc2626;font-weight:700;">📊 ${parts.join(' · ')}</td></tr>`;
+      }
+    }
+
+    const statusClass = g.isMismatch ? 'mismatch' : 'match';
+    const statusText = g.isMismatch ? '⚠️ ערכים לא תואמים' : '✓ ערכים תואמים';
+
+    return `
+      <div class="print-card ${statusClass}">
+        <div class="print-card-header">
+          <div class="addr">#${idx + 1} · ${escapeHtml(g.street)} ${escapeHtml(String(g.number))}</div>
+          <div class="status ${statusClass}">${statusText} · ${g.records.length} סקירות</div>
+        </div>
+
+        <table class="print-tbl">
+          <thead>
+            <tr>
+              <th>זמן</th>
+              <th>סוקר</th>
+              <th>פחי 360</th>
+              <th>פחי 1100</th>
+              <th>שבורים</th>
+              <th>הערות</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+            ${diffRow}
+          </tbody>
+        </table>
+
+        <div class="print-decision">
+          <div class="row">
+            <label>החלטת רכז:</label>
+            <div class="line"></div>
+          </div>
+          <div class="row">
+            <label>ערך נכון:</label>
+            <span style="font-size:10pt;">360:</span>
+            <div class="line" style="max-width:60pt;"></div>
+            <span style="font-size:10pt;">1100:</span>
+            <div class="line" style="max-width:60pt;"></div>
+            <span style="font-size:10pt;">שבורים:</span>
+            <div class="line" style="max-width:60pt;"></div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Footer
+  html += `
+    <div class="print-footer">
+      דוח זה הופק אוטומטית ממערכת ספירת פחים · עיריית בני ברק · עמוד <span class="page"></span>
+    </div>
+  `;
+
+  // Inject into hidden container and trigger print
+  const container = document.getElementById('print-container');
+  container.innerHTML = html;
+
+  // Small delay to let the browser render
+  setTimeout(() => {
+    window.print();
+    // Optional: clear the container after print to save memory
+    setTimeout(() => { container.innerHTML = ''; }, 1000);
+  }, 100);
 }
 
 /* ═══════════════════════════════════════════════════
