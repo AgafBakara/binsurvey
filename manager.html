@@ -1679,11 +1679,21 @@ function getLatestByAddress() {
 }
 
 function computeOverview() {
-  const total = state.addresses.length;
   const latestByAddr = getLatestByAddress();
   const doneIds = Object.keys(latestByAddr);
   const done = doneIds.length;
-  const remaining = total - done;
+
+  // הפרד בין המאסטר לכתובות שנוספו בשטח
+  const masterIds = new Set(state.addresses.map(a => a.address_id));
+  let fieldAddedDone = 0;
+  for (const id of doneIds) {
+    if (!masterIds.has(id)) fieldAddedDone++;
+  }
+  const doneInMaster = done - fieldAddedDone;
+
+  const masterTotal = state.addresses.length;
+  const totalIncludingFieldAdded = masterTotal + fieldAddedDone;
+  const remaining = masterTotal - doneInMaster;
 
   let sum360 = 0, sum1100 = 0, broken360 = 0, broken1100 = 0;
   let addressesWithBroken = 0;
@@ -1706,8 +1716,11 @@ function computeOverview() {
   }
 
   return {
-    total, done, remaining,
-    pctDone: total ? (done / total) * 100 : 0,
+    total: masterTotal,
+    totalIncludingFieldAdded,
+    fieldAddedDone,
+    done, doneInMaster, remaining,
+    pctDone: masterTotal ? (doneInMaster / masterTotal) * 100 : 0,
     sum360, sum1100,
     sumBins: sum360 + sum1100,
     broken360, broken1100,
@@ -1810,13 +1823,17 @@ function renderOverview() {
   $('#overview-updated').textContent = 'עדכון אחרון: ' + (state.lastSync ? state.lastSync.toLocaleTimeString('he-IL') : '—');
 
   $('#kpi-total').textContent = fmtNum(ov.total);
-  $('#kpi-total-sub').textContent = `נרשמו במערכת`;
+  if (ov.fieldAddedDone > 0) {
+    $('#kpi-total-sub').innerHTML = `<span>ברשימה המקורית · <strong style="color:var(--gold-dark);">+${fmtNum(ov.fieldAddedDone)} נוספו בשטח</strong></span>`;
+  } else {
+    $('#kpi-total-sub').textContent = `נרשמו במערכת`;
+  }
 
   $('#kpi-done').textContent = fmtNum(ov.done);
   $('#kpi-done-bar').style.width = ov.pctDone + '%';
 
   $('#kpi-remaining').textContent = fmtNum(ov.remaining);
-  $('#kpi-remaining-sub').innerHTML = `<span>${fmtPct(ov.pctDone)} הושלמו</span>`;
+  $('#kpi-remaining-sub').innerHTML = `<span>${fmtPct(ov.pctDone)} הושלמו מהמקורית</span>`;
 
   $('#kpi-bins').textContent = fmtNum(ov.sumBins);
   $('#kpi-bins-sub').innerHTML = `<span class="bin-pill s360">360: ${fmtNum(ov.sum360)}</span> <span class="bin-pill s1100">1100: ${fmtNum(ov.sum1100)}</span>`;
@@ -2482,9 +2499,44 @@ function exportRecordsFiltered() {
   downloadData(rows, 'סקירות_מסוננות', 'xlsx');
 }
 
+/** מחזירה רשימה מורחבת של כל הכתובות: המאסטר + כתובות שנוספו בשטח (יש להן סקירה אבל לא ברשימה).
+ *  לכל כתובת נוספת מוסיף דגל _fieldAdded = true.
+ *  זה מה שהייצוא ובחלק מהסטטיסטיקות צריכים להשתמש בו כדי לתת תמונה מלאה. */
+function getAllAddressesIncludingFieldAdded() {
+  // מפה של כתובות מאסטר לפי address_id
+  const masterIds = new Set(state.addresses.map(a => a.address_id));
+
+  // תוצאה: מתחילים ממאסטר, ואז מוסיפים כתובות מהסקירות שלא נמצאות במאסטר
+  const result = [...state.addresses];
+
+  // חפש בסקירות כתובות שאין להן address_id במאסטר
+  const seenNewAddrs = new Set();
+  for (const r of state.records) {
+    const aid = r.address_id;
+    if (!aid) continue;
+    if (masterIds.has(aid)) continue;   // כבר במאסטר
+    if (seenNewAddrs.has(aid)) continue; // כבר הוספנו
+    seenNewAddrs.add(aid);
+
+    // בנה רשומת "כתובת" מהסקירה
+    result.push({
+      address_id: aid,
+      'שם רחוב': r['שם רחוב'] || '',
+      'מספר בית': r['מספר בית'] || '',
+      'שכונה': r['שכונה'] || '',
+      'סמל רחוב': '',
+      'מיקוד': '',
+      _fieldAdded: true
+    });
+  }
+
+  return result;
+}
+
 function exportAddresses(format) {
   const latestByAddr = getLatestByAddress();
-  const rows = state.addresses.map(a => {
+  const allAddresses = getAllAddressesIncludingFieldAdded();
+  const rows = allAddresses.map(a => {
     const r = latestByAddr[a.address_id];
     return {
       'ID': a.address_id,
@@ -2492,6 +2544,7 @@ function exportAddresses(format) {
       'מספר בית': a['מספר בית'] || '',
       'שכונה': (r && r['שכונה']) || a['שכונה'] || '',
       'סטטוס': r ? 'נסקר' : 'לא נסקר',
+      'מקור': a._fieldAdded ? '✨ נוספה בשטח' : 'רשימה מקורית',
       'סוקר אחרון': r ? (r['סוקר'] || '') : '',
       'תאריך סקירה': r ? fmtDate(r.timestamp) : '',
       'פחי 360': r ? (r['פחי 360'] || 0) : '',
@@ -2630,7 +2683,8 @@ function prepareRecordsForSheet() {
 
 function prepareAddressesForSheet() {
   const latestByAddr = getLatestByAddress();
-  return state.addresses.map(a => {
+  const allAddresses = getAllAddressesIncludingFieldAdded();
+  return allAddresses.map(a => {
     const r = latestByAddr[a.address_id];
     return {
       'ID': a.address_id,
@@ -2638,6 +2692,7 @@ function prepareAddressesForSheet() {
       'מספר בית': a['מספר בית'] || '',
       'שכונה': (r && r['שכונה']) || a['שכונה'] || '',
       'סטטוס': r ? 'נסקר' : 'לא נסקר',
+      'מקור': a._fieldAdded ? '✨ נוספה בשטח' : 'רשימה מקורית',
       'סוקר אחרון': r ? (r['סוקר'] || '') : '',
       'תאריך': r ? fmtDate(r.timestamp) : '',
       'פחי 360': r ? (r['פחי 360'] || 0) : '',
