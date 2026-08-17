@@ -1578,8 +1578,16 @@ function fmtDateTime(d) {
   const x = new Date(d);
   return x.toLocaleDateString('he-IL') + ' ' + x.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
 }
-function dayKey(d) { return new Date(d).toISOString().slice(0, 10); }
-function todayKey() { return new Date().toISOString().slice(0, 10); }
+/** מפתח יום מבוסס אזור זמן מקומי (לא UTC).
+ *  באג ישן: toISOString() תמיד UTC, וסקירות ישראליות מ-00:00-03:00 "עברו" ליום הקודם. */
+function dayKey(d) {
+  const dt = new Date(d);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function todayKey() { return dayKey(new Date()); }
 
 /** מחלץ רשימת תמונות מרשומה (תומך בכמה גרסאות של שמות עמודות). */
 function getRecordImages(r) {
