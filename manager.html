@@ -699,6 +699,7 @@ table.tbl {
   z-index: 100;
   display: none;
   border: 1px solid var(--border);
+  min-width: 480px;
 }
 .global-search-results.active { display: block; }
 .gs-section {
@@ -1571,13 +1572,16 @@ table.tbl {
     <div class="card">
       <div class="card-header">
         <div class="card-title"><span class="ico">🏠</span>רשימת בתים לבדיקה</div>
-        <div style="display:flex;gap:8px;align-items:center;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <select id="houses-filter" onchange="renderHousesToCheck()" style="padding:6px 10px;border-radius:6px;border:1.5px solid var(--border);font-family:inherit;font-size:13px;">
-            <option value="all">הכל</option>
+            <option value="all">כל סוגי הבעיות</option>
             <option value="critical">⚫ קריטי בלבד</option>
             <option value="low">🟠 מחסור פחים בלבד</option>
             <option value="broken">⚠️ הרבה שבורים בלבד</option>
             <option value="notSurveyed">❓ לא נסקרו בלבד</option>
+          </select>
+          <select id="houses-rova-filter" onchange="renderHousesToCheck()" style="padding:6px 10px;border-radius:6px;border:1.5px solid var(--border);font-family:inherit;font-size:13px;">
+            <option value="">כל הרובעים</option>
           </select>
           <button class="top-btn" onclick="exportHousesToCheck()">📥 ייצא</button>
         </div>
@@ -1780,7 +1784,7 @@ const state = {
   surveyors: [],
   lastSync: null,
   loading: false,
-  sort: { records: { col: 'timestamp', dir: 'desc' }, surveyors: { col: 'count', dir: 'desc' }, streets: { col: 'name', dir: 'asc' }, rova: { col: 'done', dir: 'desc' } },
+  sort: { records: { col: 'timestamp', dir: 'desc' }, surveyors: { col: 'count', dir: 'desc' }, streets: { col: 'name', dir: 'asc' }, rova: { col: 'done', dir: 'desc' }, houses: { col: 'residents', dir: 'desc' } },
   map: null,
   mapMarkers: [],
   surveyorColors: {},
@@ -3346,45 +3350,115 @@ function renderSearchResults(results, q) {
     return;
   }
 
+  const latestByAddr = getLatestByAddress();
+
   let html = '';
 
+  // ═══ רובעים - עם סטטיסטיקה מלאה ═══
   if (results.rovaim.length > 0) {
     html += `<div class="gs-section">🏙️ רובעים (${results.rovaim.length})</div>`;
     for (const r of results.rovaim.slice(0, 5)) {
+      // Compute rova stats
+      const rovaAddrs = state.addresses.filter(a => (a['שם רובע'] || 'לא משויך') === r.name);
+      let done = 0, bins360 = 0, bins1100 = 0, residents = 0;
+      for (const a of rovaAddrs) {
+        residents += state.mmdByAddress[a.address_id] || 0;
+        const rec = latestByAddr[a.address_id];
+        if (rec) {
+          done++;
+          bins360 += Number(rec['פחי 360']) || 0;
+          bins1100 += Number(rec['פחי 1100']) || 0;
+        }
+      }
+      const stdBins = standardBinsFor(bins360, bins1100);
+      const bpr = residents > 0 && stdBins > 0 ? stdBins / residents : 0;
+      const bprCat = binsPerResidentCategory(stdBins, residents);
       const label = r.code ? `${escapeHtml(r.code)} · ${escapeHtml(r.name)}` : escapeHtml(r.name);
+
       html += `<div class="gs-item" onclick="openRovaDetail('${escapeJs(r.name)}'); closeGlobalSearch();">
         <div class="gs-item-title">${label}</div>
-        <div class="gs-item-sub">${fmtNum(r.count)} כתובות</div>
+        <div class="gs-item-sub" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <span>🏠 ${fmtNum(r.count)} כתובות · ✓ ${fmtNum(done)}</span>
+          ${residents > 0 ? `<span>👥 ${fmtNum(residents)}</span>` : ''}
+          ${stdBins > 0 ? `<span>📊 ${fmtNum(stdBins)} תקן</span>` : ''}
+          ${bprCat !== 'no-data' ? binsPerResidentBadge(bprCat, bpr) : ''}
+        </div>
       </div>`;
     }
   }
 
+  // ═══ רחובות - עם סטטיסטיקה מלאה ═══
   if (results.streets.length > 0) {
     html += `<div class="gs-section">🏘️ רחובות (${results.streets.length})</div>`;
     for (const s of results.streets.slice(0, 8)) {
-      const rovaLabel = s.rovaCode ? `${escapeHtml(s.rovaCode)} · ${escapeHtml(s.rova || '')}` : escapeHtml(s.rova || '');
+      const streetAddrs = state.addresses.filter(a => a['שם רחוב'] === s.name);
+      let done = 0, bins360 = 0, bins1100 = 0, residents = 0;
+      for (const a of streetAddrs) {
+        residents += state.mmdByAddress[a.address_id] || 0;
+        const rec = latestByAddr[a.address_id];
+        if (rec) {
+          done++;
+          bins360 += Number(rec['פחי 360']) || 0;
+          bins1100 += Number(rec['פחי 1100']) || 0;
+        }
+      }
+      const stdBins = standardBinsFor(bins360, bins1100);
+      const bpr = residents > 0 && stdBins > 0 ? stdBins / residents : 0;
+      const bprCat = binsPerResidentCategory(stdBins, residents);
+      const rovaLabel = s.rovaCode ? `${escapeHtml(s.rovaCode)}` : escapeHtml(s.rova || '');
+
       html += `<div class="gs-item" onclick="openStreetDetail('${escapeJs(s.name)}'); closeGlobalSearch();">
-        <div class="gs-item-title">${escapeHtml(s.name)}</div>
-        <div class="gs-item-sub">${fmtNum(s.count)} כתובות · ${rovaLabel}</div>
+        <div class="gs-item-title">${escapeHtml(s.name)} <span class="inline-mini">· ${rovaLabel}</span></div>
+        <div class="gs-item-sub" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <span>🏠 ${fmtNum(s.count)} · ✓ ${fmtNum(done)}</span>
+          ${residents > 0 ? `<span>👥 ${fmtNum(residents)}</span>` : ''}
+          ${stdBins > 0 ? `<span>📊 ${fmtNum(stdBins)} תקן</span>` : ''}
+          ${bprCat !== 'no-data' ? binsPerResidentBadge(bprCat, bpr) : ''}
+        </div>
       </div>`;
     }
   }
 
+  // ═══ כתובות - עם כל הנתונים המלאים ═══
   if (results.addresses.length > 0) {
     html += `<div class="gs-section">📍 כתובות (${results.addresses.length})</div>`;
     for (const a of results.addresses.slice(0, 8)) {
+      const rec = latestByAddr[a.address_id];
+      const residents = state.mmdByAddress[a.address_id] || 0;
+      const b360 = rec ? Number(rec['פחי 360']) || 0 : 0;
+      const b1100 = rec ? Number(rec['פחי 1100']) || 0 : 0;
+      const stdBins = standardBinsFor(b360, b1100);
+      const bpr = residents > 0 && stdBins > 0 ? stdBins / residents : 0;
+      const bprCat = binsPerResidentCategory(stdBins, residents);
+      const surveyed = rec ? '<span style="color:var(--success);font-weight:600;">✓ נסקר</span>' : '<span style="color:var(--text-muted);">○ לא נסקר</span>';
+
       html += `<div class="gs-item" onclick="openAddressDetail('${escapeJs(a.address_id)}'); closeGlobalSearch();">
-        <div class="gs-item-title">${escapeHtml(a['שם רחוב'])} ${escapeHtml(String(a['מספר בית']))}</div>
-        <div class="gs-item-sub">${escapeHtml(a['שם רובע'] || 'לא משויך')}</div>
+        <div class="gs-item-title">${escapeHtml(a['שם רחוב'])} ${escapeHtml(String(a['מספר בית']))} <span class="inline-mini">· ${escapeHtml(a['שם רובע'] || 'לא משויך')}</span></div>
+        <div class="gs-item-sub" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <span>${surveyed}</span>
+          ${residents > 0 ? `<span>👥 ${fmtNum(residents)} תושבים</span>` : ''}
+          ${rec ? `<span><span class="bin-pill s360">360: ${fmtNum(b360)}</span> <span class="bin-pill s1100">1100: ${fmtNum(b1100)}</span></span>` : ''}
+          ${stdBins > 0 ? `<span>📊 <strong>${fmtNum(stdBins)}</strong> פחי תקן</span>` : ''}
+          ${bprCat !== 'no-data' ? binsPerResidentBadge(bprCat, bpr) : ''}
+        </div>
       </div>`;
     }
   }
 
+  // ═══ סוקרים - עם סטטיסטיקה של פעילות ═══
   if (results.surveyors.length > 0) {
     html += `<div class="gs-section">👤 סוקרים (${results.surveyors.length})</div>`;
     for (const s of results.surveyors.slice(0, 5)) {
+      const surveyorRecs = state.records.filter(r => r['סוקר'] === s.name);
+      const uniqueAddrs = new Set(surveyorRecs.map(r => r.address_id)).size;
+      const color = state.surveyorColors[s.name] || 'var(--text)';
+
       html += `<div class="gs-item" onclick="openSurveyorDetail('${escapeJs(s.name)}'); closeGlobalSearch();">
-        <div class="gs-item-title">${escapeHtml(s.name)}</div>
+        <div class="gs-item-title" style="color:${color};">${escapeHtml(s.name)}</div>
+        <div class="gs-item-sub" style="display:flex;gap:10px;flex-wrap:wrap;">
+          <span>📋 ${fmtNum(surveyorRecs.length)} סקירות</span>
+          <span>🏠 ${fmtNum(uniqueAddrs)} כתובות ייחודיות</span>
+        </div>
       </div>`;
     }
   }
@@ -5033,9 +5107,17 @@ function filterHousesByType(type) {
   }, 50);
 }
 
+function sortHousesTable(col) {
+  const cur = state.sort.houses;
+  if (cur.col === col) cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+  else { cur.col = col; cur.dir = 'desc'; }
+  renderHousesToCheck();
+}
+
 function renderHousesToCheck() {
   const all = computeHousesToCheck();
   const filter = $('#houses-filter')?.value || 'all';
+  const rovaFilter = $('#houses-rova-filter')?.value || '';
 
   // KPIs (always show totals regardless of filter)
   const counts = { critical: 0, low: 0, broken: 0, notSurveyed: 0 };
@@ -5050,21 +5132,59 @@ function renderHousesToCheck() {
   $('#houses-notsurveyed').textContent = fmtNum(counts.notSurveyed);
   $('#houses-broken-sub').textContent = `סף: ${state.settings.brokenPctThreshold}% ומעלה`;
 
-  // Apply filter
-  const filtered = filter === 'all' ? all : all.filter(h => h.issues.includes(filter));
+  // Populate rova filter dropdown (once)
+  const rovaSelect = $('#houses-rova-filter');
+  if (rovaSelect && rovaSelect.options.length <= 1) {
+    const rovaOptions = new Set();
+    for (const h of all) {
+      const r = h.addr['שם רובע'];
+      if (r) rovaOptions.add(r);
+    }
+    [...rovaOptions].sort().forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r;
+      opt.textContent = r;
+      rovaSelect.appendChild(opt);
+    });
+  }
+
+  // Apply filters
+  let filtered = filter === 'all' ? all : all.filter(h => h.issues.includes(filter));
+  if (rovaFilter) filtered = filtered.filter(h => h.addr['שם רובע'] === rovaFilter);
 
   if (filtered.length === 0) {
     $('#houses-table').innerHTML = '<div class="empty">אין בתים העונים לקריטריון זה 🎉</div>';
     return;
   }
 
-  // Sort: critical first, then by residents desc
-  const priority = { 'critical': 0, 'notSurveyed': 1, 'low': 2, 'broken': 3 };
-  filtered.sort((a, b) => {
-    const pa = Math.min(...a.issues.map(i => priority[i] ?? 99));
-    const pb = Math.min(...b.issues.map(i => priority[i] ?? 99));
-    if (pa !== pb) return pa - pb;
-    return b.residents - a.residents;
+  // Enrich each row with computed fields for sorting
+  const rows = filtered.map(h => {
+    const r = h.record;
+    const b360 = r ? Number(r['פחי 360']) || 0 : 0;
+    const b1100 = r ? Number(r['פחי 1100']) || 0 : 0;
+    const stdBins = standardBinsFor(b360, b1100);
+    const bk = r ? (Number(r['פחי 360 שבורים']) || 0) + (Number(r['פחי 1100 שבורים']) || 0) : 0;
+    const totalBins = b360 + b1100;
+    const brokenPct = totalBins > 0 ? (bk / totalBins) * 100 : 0;
+    const bpr = h.residents > 0 && stdBins > 0 ? stdBins / h.residents : 0;
+    return {
+      house: h,
+      street: h.addr['שם רחוב'] || '',
+      number: Number(h.addr['מספר בית']) || 0,
+      rova: h.addr['קוד רובע'] || '',
+      residents: h.residents,
+      totalBins, stdBins, brokenPct, bk, bpr
+    };
+  });
+
+  // Sort
+  const { col, dir } = state.sort.houses;
+  rows.sort((a, b) => {
+    let av = a[col], bv = b[col];
+    if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+    if (av < bv) return dir === 'asc' ? -1 : 1;
+    if (av > bv) return dir === 'asc' ? 1 : -1;
+    return 0;
   });
 
   const issueBadge = (issue) => {
@@ -5077,45 +5197,39 @@ function renderHousesToCheck() {
     return map[issue] || issue;
   };
 
-  const rows = filtered.map(h => {
-    const r = h.record;
-    const b360 = r ? Number(r['פחי 360']) || 0 : 0;
-    const b1100 = r ? Number(r['פחי 1100']) || 0 : 0;
-    const stdBins = standardBinsFor(b360, b1100);
-    const bk = r ? (Number(r['פחי 360 שבורים']) || 0) + (Number(r['פחי 1100 שבורים']) || 0) : 0;
-    const totalBins = b360 + b1100;
-    const brokenPct = totalBins > 0 ? (bk / totalBins) * 100 : 0;
-    const bpr = h.residents > 0 && stdBins > 0 ? stdBins / h.residents : 0;
+  const sortIcon = (col) => {
+    if (state.sort.houses.col !== col) return '';
+    return state.sort.houses.dir === 'asc' ? ' ▲' : ' ▼';
+  };
 
-    return `
-      <tr onclick="openAddressDetail('${escapeJs(h.addr.address_id)}')" style="cursor:pointer;">
-        <td>${h.issues.map(issueBadge).join(' ')}</td>
-        <td><strong>${escapeHtml(h.addr['שם רחוב'] || '')} ${escapeHtml(String(h.addr['מספר בית'] || ''))}</strong></td>
-        <td>${h.addr['קוד רובע'] ? `<span class="badge teal">${escapeHtml(h.addr['קוד רובע'])}</span>` : '—'}</td>
-        <td><strong>${fmtNum(h.residents)}</strong></td>
-        <td>${totalBins > 0 ? fmtNum(totalBins) : '—'}</td>
-        <td>${stdBins > 0 ? `<strong style="color:var(--gold-dark);">${fmtNum(stdBins)}</strong>` : '—'}</td>
-        <td>${bpr > 0 ? bpr.toFixed(3) : '—'}</td>
-        <td>${bk > 0 ? `<span style="color:#8a6d10;font-weight:600;">${fmtNum(bk)} (${fmtPct(brokenPct)})</span>` : '—'}</td>
-      </tr>`;
-  }).join('');
+  const rowsHtml = rows.map(x => `
+    <tr onclick="openAddressDetail('${escapeJs(x.house.addr.address_id)}')" style="cursor:pointer;">
+      <td>${x.house.issues.map(issueBadge).join(' ')}</td>
+      <td><strong>${escapeHtml(x.street)} ${escapeHtml(String(x.number))}</strong></td>
+      <td>${x.rova ? `<span class="badge teal">${escapeHtml(x.rova)}</span>` : '—'}</td>
+      <td><strong>${fmtNum(x.residents)}</strong></td>
+      <td>${x.totalBins > 0 ? fmtNum(x.totalBins) : '—'}</td>
+      <td>${x.stdBins > 0 ? `<strong style="color:var(--gold-dark);">${fmtNum(x.stdBins)}</strong>` : '—'}</td>
+      <td>${x.bpr > 0 ? x.bpr.toFixed(3) : '—'}</td>
+      <td>${x.bk > 0 ? `<span style="color:#8a6d10;font-weight:600;">${fmtNum(x.bk)} (${fmtPct(x.brokenPct)})</span>` : '—'}</td>
+    </tr>`).join('');
 
   $('#houses-table').innerHTML = `
     <div style="margin-bottom:12px;color:var(--text-muted);font-size:13px;">
-      ${fmtNum(filtered.length)} בתים מוצגים · קליק על שורה לפרטי כתובת
+      ${fmtNum(rows.length)} בתים מוצגים · קליק על כותרת למיון · קליק על שורה לפרטי כתובת
     </div>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr>
         <th>סוג הבעיה</th>
-        <th>כתובת</th>
-        <th>רובע</th>
-        <th>תושבים</th>
-        <th>פחים</th>
-        <th>פחי תקן</th>
-        <th>פחי תקן לתושב</th>
-        <th>שבורים</th>
+        <th onclick="sortHousesTable('street')" style="cursor:pointer;">כתובת${sortIcon('street')}</th>
+        <th onclick="sortHousesTable('rova')" style="cursor:pointer;">רובע${sortIcon('rova')}</th>
+        <th onclick="sortHousesTable('residents')" style="cursor:pointer;">תושבים${sortIcon('residents')}</th>
+        <th onclick="sortHousesTable('totalBins')" style="cursor:pointer;">פחים${sortIcon('totalBins')}</th>
+        <th onclick="sortHousesTable('stdBins')" style="cursor:pointer;">פחי תקן${sortIcon('stdBins')}</th>
+        <th onclick="sortHousesTable('bpr')" style="cursor:pointer;">תקן/תושב${sortIcon('bpr')}</th>
+        <th onclick="sortHousesTable('bk')" style="cursor:pointer;">שבורים${sortIcon('bk')}</th>
       </tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>${rowsHtml}</tbody>
     </table></div>`;
 }
 
@@ -5164,10 +5278,7 @@ function switchTab(name) {
   if (name === 'qa') renderQAPanel();
   if (name === 'rova') renderRovaAnalysis();
   if (name === 'houses') renderHousesToCheck();
-  if (name === 'settings') {
-    $('#settings-dupe-days').value = state.settings.dupeDaysWindow;
-    if ($('#settings-panel-content')) renderSettingsPanel();
-  }
+  if (name === 'settings') renderSettingsPanel();
   window.scrollTo(0, 0);
 }
 
