@@ -1782,11 +1782,23 @@ function fmtDateTime(d) {
 }
 /** מפתח יום מבוסס אזור זמן מקומי (לא UTC).
  *  באג ישן: toISOString() תמיד UTC, וסקירות ישראליות מ-00:00-03:00 "עברו" ליום הקודם.
- *  מחזיר null אם התאריך לא תקין - כדי שאגרגציות ידלגו עליו במקום להראות "Invalid Date". */
+ *  מנסה לפרסר timestamp בכמה דרכים לפני שמוותר. */
 function dayKey(d) {
   if (!d) return null;
-  const dt = new Date(d);
+
+  // אם זה כבר Date object תקין
+  let dt = d instanceof Date ? d : new Date(d);
+
+  // אם לא הצליח - נסה לתקן פורמטים נפוצים של Google Sheets
+  if (isNaN(dt.getTime()) && typeof d === 'string') {
+    // Try: "2026-07-15 12:52:45.816000" → "2026-07-15T12:52:45.816"
+    let fixed = d.replace(' ', 'T').replace(/(\.\d{3})\d+$/, '$1');
+    dt = new Date(fixed);
+  }
+
+  // אם עדיין לא תקין - החזר null כדי לדלג עליו
   if (isNaN(dt.getTime())) return null;
+
   const y = dt.getFullYear();
   const m = String(dt.getMonth() + 1).padStart(2, '0');
   const day = String(dt.getDate()).padStart(2, '0');
