@@ -3828,7 +3828,9 @@ function renderRovaAnalysis() {
 
   $('#rova-count').textContent = fmtNum(totalRovaim);
   $('#rova-count-sub').textContent = withData.length + ' משויכים · ' + (totalRovaim - withData.length) + ' לא משויך';
-  $('#rova-top').textContent = topRova.name;
+  $('#rova-top').innerHTML = topRova.code
+    ? `${escapeHtml(topRova.code)}<div style="font-size:11px;color:var(--text-muted);font-weight:400;margin-top:2px;">${escapeHtml(topRova.name)}</div>`
+    : escapeHtml(topRova.name);
   $('#rova-top-sub').textContent = fmtNum(topRova.done) + ' סקירות · ' + fmtPct(topRova.pct);
   $('#rova-avg').textContent = fmtPct(avgPct);
   $('#rova-avg-residents').textContent = avgResPerAddr > 0 ? avgResPerAddr.toFixed(1) : '—';
@@ -3846,7 +3848,7 @@ function renderRovaAnalysis() {
 
   $('#rova-tbody').innerHTML = sorted.map(s => `
     <tr>
-      <td><strong>${escapeHtml(s.name)}</strong>${s.code ? ` <span class="inline-mini">${escapeHtml(s.code)}</span>` : ''}</td>
+      <td><strong>${escapeHtml(s.code || s.name)}</strong>${s.code ? ` <span class="inline-mini" style="display:block;margin-top:2px;">${escapeHtml(s.name)}</span>` : ''}</td>
       <td><strong>${fmtNum(s.addresses)}</strong></td>
       <td style="color:var(--success);font-weight:600;">${fmtNum(s.done)}</td>
       <td style="color:var(--text-muted);">${fmtNum(s.remaining)}</td>
@@ -3865,7 +3867,10 @@ function renderRovaAnalysis() {
   $('#rova-progress-bars').innerHTML = bars.map(s => `
     <div style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px;">
-        <strong>${escapeHtml(s.name)}</strong>
+        <div>
+          <strong>${escapeHtml(s.code || s.name)}</strong>
+          ${s.code ? `<span style="color:var(--text-muted);font-size:11px;margin-right:6px;">${escapeHtml(s.name)}</span>` : ''}
+        </div>
         <span style="color:var(--text-muted);">${fmtNum(s.done)}/${fmtNum(s.addresses)} · ${fmtPct(s.pct)}</span>
       </div>
       <div class="progress-bar" style="height:14px;">
