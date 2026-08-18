@@ -605,7 +605,7 @@ table.tbl {
   justify-content: space-between;
   align-items: center;
 }
-.modal-hdr h3 { font-size: 17px; font-weight: 700; color: var(--navy); }
+.modal-hdr h3 { font-size: 17px; font-weight: 700; color: var(--navy); flex: 1; text-align: center; }
 .modal-close {
   width: 32px; height: 32px;
   border-radius: 50%;
@@ -613,6 +613,115 @@ table.tbl {
   font-size: 16px;
   color: var(--text-muted);
 }
+.modal-back {
+  background: var(--bg);
+  color: var(--info);
+  border: 1.5px solid var(--info);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+}
+.modal-back:hover { background: var(--info-light); }
+
+/* Drill-down links - underlined numbers/text that lead to a modal */
+.drill-link {
+  color: var(--info);
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1.5px dashed var(--info);
+  transition: color .15s;
+}
+.drill-link:hover { color: var(--teal); border-bottom-color: var(--teal); }
+.drill-num {
+  cursor: pointer;
+  transition: color .15s;
+}
+.drill-num:hover { color: var(--info); text-decoration: underline; }
+
+/* Make KPI values clickable */
+.kpi.clickable {
+  cursor: pointer;
+  transition: transform .1s, box-shadow .15s;
+}
+.kpi.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.08);
+}
+.kpi.clickable .kpi-value {
+  color: var(--info);
+}
+
+/* Search bar in header */
+.global-search {
+  position: relative;
+  flex: 1;
+  max-width: 500px;
+  margin: 0 20px;
+}
+.global-search input {
+  width: 100%;
+  padding: 10px 14px 10px 40px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  background: white;
+  font-family: inherit;
+  transition: all .15s;
+}
+.global-search input:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(43, 140, 126, 0.1);
+}
+.global-search::before {
+  content: '🔍';
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  pointer-events: none;
+}
+.global-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.15);
+  max-height: 500px;
+  overflow-y: auto;
+  z-index: 100;
+  display: none;
+  border: 1px solid var(--border);
+}
+.global-search-results.active { display: block; }
+.gs-section {
+  padding: 10px 14px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: .5px;
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+}
+.gs-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.gs-item:hover { background: var(--bg); }
+.gs-item:last-child { border-bottom: none; }
+.gs-item-title { font-weight: 600; color: var(--navy); font-size: 14px; }
+.gs-item-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.gs-empty { padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
 .modal-body { padding: 20px 22px; }
 
 .photo-thumb {
@@ -987,6 +1096,13 @@ table.tbl {
         <div class="subtitle">עיריית בני ברק · אגף בקרה</div>
       </div>
     </div>
+    <div class="global-search" id="global-search">
+      <input type="text" id="gs-input" placeholder="חיפוש כתובת, רחוב, רובע או סוקר..."
+             oninput="runGlobalSearch(this.value)"
+             onfocus="if(this.value)runGlobalSearch(this.value)"
+             onkeydown="if(event.key==='Escape')closeGlobalSearch()">
+      <div class="global-search-results" id="gs-results"></div>
+    </div>
     <div class="top-actions">
       <div class="sync-pill" id="sync-pill">
         <span class="dot"></span>
@@ -1054,7 +1170,7 @@ table.tbl {
         <div class="kpi-value" id="kpi-total">—</div>
         <div class="kpi-sub" id="kpi-total-sub">—</div>
       </div>
-      <div class="kpi success">
+      <div class="kpi success clickable" onclick="openSurveyedAddresses()">
         <div class="kpi-label"><span class="ico">✓</span>נסקרו</div>
         <div class="kpi-value" id="kpi-done">—</div>
         <div class="progress-bar"><div class="progress-bar-fill" id="kpi-done-bar" style="width: 0%"></div></div>
@@ -1064,12 +1180,12 @@ table.tbl {
         <div class="kpi-value" id="kpi-remaining">—</div>
         <div class="kpi-sub" id="kpi-remaining-sub">—</div>
       </div>
-      <div class="kpi gold">
+      <div class="kpi gold clickable" onclick="openAddressesWithBins('all')">
         <div class="kpi-label"><span class="ico">🗑️</span>סה"כ פחים</div>
         <div class="kpi-value" id="kpi-bins">—</div>
         <div class="kpi-sub" id="kpi-bins-sub">—</div>
       </div>
-      <div class="kpi navy" id="kpi-residents-card" style="display:none;">
+      <div class="kpi navy clickable" id="kpi-residents-card" style="display:none;" onclick="openTopResidentAddresses()">
         <div class="kpi-label"><span class="ico">👥</span>תושבים בעיר</div>
         <div class="kpi-value" id="kpi-residents">—</div>
         <div class="kpi-sub" id="kpi-residents-sub">לפי ממ"ד</div>
@@ -1077,22 +1193,22 @@ table.tbl {
     </div>
 
     <div class="kpi-grid">
-      <div class="kpi">
+      <div class="kpi clickable" onclick="openAddressesWithBins('360')">
         <div class="kpi-label"><span class="ico">📦</span>פחי 360 ליטר</div>
         <div class="kpi-value" id="kpi-360">—</div>
         <div class="kpi-sub" id="kpi-360-sub">ממוצע לכתובת: —</div>
       </div>
-      <div class="kpi gold">
+      <div class="kpi gold clickable" onclick="openAddressesWithBins('1100')">
         <div class="kpi-label"><span class="ico">📦</span>פחי 1100 ליטר</div>
         <div class="kpi-value" id="kpi-1100">—</div>
         <div class="kpi-sub" id="kpi-1100-sub">ממוצע לכתובת: —</div>
       </div>
-      <div class="kpi purple">
+      <div class="kpi purple clickable" onclick="switchTab('surveyors')">
         <div class="kpi-label"><span class="ico">👥</span>סוקרים פעילים</div>
         <div class="kpi-value" id="kpi-surveyors">—</div>
         <div class="kpi-sub" id="kpi-surveyors-sub">—</div>
       </div>
-      <div class="kpi success">
+      <div class="kpi success clickable" onclick="openDayRecords(todayKey())">
         <div class="kpi-label"><span class="ico">📅</span>היום</div>
         <div class="kpi-value" id="kpi-today">—</div>
         <div class="kpi-sub" id="kpi-today-sub">סקירות חדשות</div>
@@ -1100,7 +1216,7 @@ table.tbl {
     </div>
 
     <div class="kpi-grid">
-      <div class="kpi warning">
+      <div class="kpi warning clickable" onclick="openBrokenBinsList()">
         <div class="kpi-label"><span class="ico">⚠️</span>פחים שבורים</div>
         <div class="kpi-value" id="kpi-broken-total">—</div>
         <div class="kpi-sub" id="kpi-broken-total-sub">—</div>
@@ -1115,7 +1231,7 @@ table.tbl {
         <div class="kpi-value" id="kpi-broken-1100">—</div>
         <div class="kpi-sub" id="kpi-broken-1100-sub">—</div>
       </div>
-      <div class="kpi">
+      <div class="kpi clickable" onclick="openBrokenBinsList()">
         <div class="kpi-label"><span class="ico">🏠</span>כתובות עם שבורים</div>
         <div class="kpi-value" id="kpi-addrs-broken">—</div>
         <div class="kpi-sub">דורשות טיפול</div>
@@ -1585,6 +1701,7 @@ table.tbl {
 <div class="modal-backdrop" id="modal">
   <div class="modal-box">
     <div class="modal-hdr">
+      <button class="modal-back" id="modal-back" onclick="backModal()" style="display:none;" title="חזור">← חזור</button>
       <h3 id="modal-title">—</h3>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
@@ -2056,9 +2173,9 @@ function renderSurveyors() {
       </tr></thead>
       <tbody>
         ${stats.map((s, i) => `
-          <tr>
+          <tr onclick="openSurveyorDetail('${escapeJs(s.name)}')" style="cursor:pointer;">
             <td>${medal(i)}</td>
-            <td><strong style="color:${state.surveyorColors[s.name] || 'var(--text)'}">${escapeHtml(s.name)}</strong></td>
+            <td><strong style="color:${state.surveyorColors[s.name] || 'var(--text)'}"><a class="drill-link">${escapeHtml(s.name)}</a></strong></td>
             <td><strong>${fmtNum(s.count)}</strong></td>
             <td>${s.todayCount > 0 ? `<span class="badge success">${fmtNum(s.todayCount)}</span>` : `<span style="color:var(--text-dim)">—</span>`}</td>
             <td>${fmtNum(s.uniqueAddresses)}</td>
@@ -2175,8 +2292,8 @@ function renderStreetsTable() {
       </tr></thead>
       <tbody>
         ${streets.map(st => `
-          <tr>
-            <td><strong>${escapeHtml(st.name)}</strong></td>
+          <tr onclick="openStreetDetail('${escapeJs(st.name)}')" style="cursor:pointer;">
+            <td><a class="drill-link"><strong>${escapeHtml(st.name)}</strong></a></td>
             <td>${fmtNum(st.total)}</td>
             <td>${fmtNum(st.done)}</td>
             <td>${fmtNum(st.remaining)}</td>
@@ -2532,8 +2649,8 @@ function renderTrend() {
         const y = pad.t + chartH - bh;
         const showLabel = trend.length <= 30 || i % Math.ceil(trend.length / 15) === 0;
         return `
-          <rect x="${x}" y="${y}" width="${barW}" height="${bh}" fill="url(#bar-grad)" rx="3">
-            <title>${d.date}: ${d.count} סקירות</title>
+          <rect x="${x}" y="${y}" width="${barW}" height="${bh}" fill="url(#bar-grad)" rx="3" style="cursor:pointer;" onclick="openDayRecords('${d.date}')">
+            <title>${d.date}: ${d.count} סקירות (קליק לפרטים)</title>
           </rect>
           <text x="${x + barW/2}" y="${y - 4}" text-anchor="middle" font-size="11" font-weight="600" fill="#1f2937">${d.count}</text>
           ${showLabel ? `<text x="${x + barW/2}" y="${h - 12}" text-anchor="middle" font-size="10" fill="#6b7280">${new Date(d.date).toLocaleDateString('he-IL', { month: '2-digit', day: '2-digit' })}</text>` : ''}`;
@@ -2865,12 +2982,553 @@ function downloadBlob(blob, filename) {
 /* ═══════════════════════════════════════════════════
    MODAL
    ═══════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════
+   GLOBAL SEARCH — one search box, 4 result groups
+   ═══════════════════════════════════════════════════ */
+
+/** מנרמל טקסט לחיפוש - מסיר סימני פיסוק וגרשיים */
+function normSearch(s) {
+  return String(s || '').toLowerCase().replace(/["'`]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function runGlobalSearch(query) {
+  const q = normSearch(query);
+  const box = $('#gs-results');
+  if (!q || q.length < 1) {
+    box.classList.remove('active');
+    return;
+  }
+
+  const results = {
+    rovaim: [],
+    streets: [],
+    addresses: [],
+    surveyors: []
+  };
+
+  // 1) Rovaim - unique combinations of code + name
+  const rovaMap = {};
+  for (const a of state.addresses) {
+    const code = a['קוד רובע'] || '';
+    const name = a['שם רובע'] || 'לא משויך';
+    const key = code + '|' + name;
+    if (!rovaMap[key]) rovaMap[key] = { code, name, count: 0 };
+    rovaMap[key].count++;
+  }
+  for (const r of Object.values(rovaMap)) {
+    if (normSearch(r.code).includes(q) || normSearch(r.name).includes(q)) {
+      results.rovaim.push(r);
+    }
+  }
+
+  // 2) Streets - unique
+  const streetMap = {};
+  for (const a of state.addresses) {
+    const s = a['שם רחוב'];
+    if (!s) continue;
+    if (!streetMap[s]) streetMap[s] = { name: s, count: 0, rova: a['שם רובע'], rovaCode: a['קוד רובע'] };
+    streetMap[s].count++;
+  }
+  for (const s of Object.values(streetMap)) {
+    if (normSearch(s.name).includes(q)) results.streets.push(s);
+  }
+
+  // 3) Addresses - specific (street + number)
+  //    Try to detect "street number" pattern like "מלצר 15"
+  const parts = q.split(' ');
+  const lastPart = parts[parts.length - 1];
+  const isNumeric = /^\d+$/.test(lastPart);
+  const streetQuery = isNumeric ? parts.slice(0, -1).join(' ') : q;
+  const numQuery = isNumeric ? Number(lastPart) : null;
+
+  for (const a of state.addresses) {
+    const streetMatch = normSearch(a['שם רחוב'] || '').includes(streetQuery);
+    const numMatch = numQuery === null || Number(a['מספר בית']) === numQuery;
+    if (streetMatch && numMatch) {
+      results.addresses.push(a);
+      if (results.addresses.length >= 15) break;
+    }
+  }
+
+  // 4) Surveyors - by name in records
+  const surveyorNames = new Set();
+  for (const r of state.records) {
+    if (r['סוקר']) surveyorNames.add(r['סוקר']);
+  }
+  for (const s of state.surveyors) {
+    if (s['שם מלא']) surveyorNames.add(s['שם מלא']);
+  }
+  for (const name of surveyorNames) {
+    if (normSearch(name).includes(q)) {
+      results.surveyors.push({ name });
+    }
+  }
+
+  renderSearchResults(results, q);
+}
+
+function renderSearchResults(results, q) {
+  const box = $('#gs-results');
+  const total = results.rovaim.length + results.streets.length + results.addresses.length + results.surveyors.length;
+
+  if (total === 0) {
+    box.innerHTML = `<div class="gs-empty">אין תוצאות עבור "${escapeHtml(q)}"</div>`;
+    box.classList.add('active');
+    return;
+  }
+
+  let html = '';
+
+  if (results.rovaim.length > 0) {
+    html += `<div class="gs-section">🏙️ רובעים (${results.rovaim.length})</div>`;
+    for (const r of results.rovaim.slice(0, 5)) {
+      const label = r.code ? `${escapeHtml(r.code)} · ${escapeHtml(r.name)}` : escapeHtml(r.name);
+      html += `<div class="gs-item" onclick="openRovaDetail('${escapeJs(r.name)}'); closeGlobalSearch();">
+        <div class="gs-item-title">${label}</div>
+        <div class="gs-item-sub">${fmtNum(r.count)} כתובות</div>
+      </div>`;
+    }
+  }
+
+  if (results.streets.length > 0) {
+    html += `<div class="gs-section">🏘️ רחובות (${results.streets.length})</div>`;
+    for (const s of results.streets.slice(0, 8)) {
+      const rovaLabel = s.rovaCode ? `${escapeHtml(s.rovaCode)} · ${escapeHtml(s.rova || '')}` : escapeHtml(s.rova || '');
+      html += `<div class="gs-item" onclick="openStreetDetail('${escapeJs(s.name)}'); closeGlobalSearch();">
+        <div class="gs-item-title">${escapeHtml(s.name)}</div>
+        <div class="gs-item-sub">${fmtNum(s.count)} כתובות · ${rovaLabel}</div>
+      </div>`;
+    }
+  }
+
+  if (results.addresses.length > 0) {
+    html += `<div class="gs-section">📍 כתובות (${results.addresses.length})</div>`;
+    for (const a of results.addresses.slice(0, 8)) {
+      html += `<div class="gs-item" onclick="openAddressDetail('${escapeJs(a.address_id)}'); closeGlobalSearch();">
+        <div class="gs-item-title">${escapeHtml(a['שם רחוב'])} ${escapeHtml(String(a['מספר בית']))}</div>
+        <div class="gs-item-sub">${escapeHtml(a['שם רובע'] || 'לא משויך')}</div>
+      </div>`;
+    }
+  }
+
+  if (results.surveyors.length > 0) {
+    html += `<div class="gs-section">👤 סוקרים (${results.surveyors.length})</div>`;
+    for (const s of results.surveyors.slice(0, 5)) {
+      html += `<div class="gs-item" onclick="openSurveyorDetail('${escapeJs(s.name)}'); closeGlobalSearch();">
+        <div class="gs-item-title">${escapeHtml(s.name)}</div>
+      </div>`;
+    }
+  }
+
+  box.innerHTML = html;
+  box.classList.add('active');
+}
+
+function closeGlobalSearch() {
+  $('#gs-results').classList.remove('active');
+  $('#gs-input').value = '';
+}
+
+// Close search when clicking outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('#global-search')) {
+    $('#gs-results')?.classList.remove('active');
+  }
+});
+
+/* ═══════════════════════════════════════════════════
+   DRILL-DOWN MODALS
+   ═══════════════════════════════════════════════════ */
+
+/** בונה טבלת סקירות לתוך מודל - עם קליק על כתובת. */
+function buildRecordsTable(records, opts = {}) {
+  if (records.length === 0) return '<div class="empty">אין סקירות</div>';
+  const showAddress = opts.showAddress !== false;
+  const showSurveyor = opts.showSurveyor !== false;
+
+  const rows = records.map(r => {
+    const b360 = Number(r['פחי 360 שבורים']) || 0;
+    const b1100 = Number(r['פחי 1100 שבורים']) || 0;
+    const bTotal = b360 + b1100;
+    const color = state.surveyorColors[r['סוקר']] || 'var(--text)';
+    return `
+      <tr>
+        <td><span class="inline-mini">${fmtDateTime(r.timestamp)}</span></td>
+        ${showAddress ? `<td><a class="drill-link" onclick="openAddressDetail('${escapeJs(r.address_id)}')">${escapeHtml(r['שם רחוב'])} ${escapeHtml(String(r['מספר בית'] || ''))}</a></td>` : ''}
+        ${showSurveyor ? `<td style="color:${color};font-weight:500;"><a class="drill-link" onclick="openSurveyorDetail('${escapeJs(r['סוקר'] || '')}')">${escapeHtml(r['סוקר'] || '—')}</a></td>` : ''}
+        <td><span class="bin-pill s360">${fmtNum(r['פחי 360'])}</span></td>
+        <td><span class="bin-pill s1100">${fmtNum(r['פחי 1100'])}</span></td>
+        <td>${bTotal > 0 ? `<span style="color:#8a6d10;font-weight:600;">⚠️ ${bTotal}</span>` : '—'}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r['הערות'] || '')}">${escapeHtml(r['הערות'] || '—')}</td>
+      </tr>`;
+  }).join('');
+
+  return `<div class="tbl-wrap"><table class="tbl">
+    <thead><tr>
+      <th>זמן</th>
+      ${showAddress ? '<th>כתובת</th>' : ''}
+      ${showSurveyor ? '<th>סוקר</th>' : ''}
+      <th>360</th><th>1100</th><th>⚠️</th><th>הערות</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+/** בונה טבלת כתובות לתוך מודל - עם קליק על כל כתובת. */
+function buildAddressesTable(addresses, opts = {}) {
+  if (addresses.length === 0) return '<div class="empty">אין כתובות</div>';
+  const latestByAddr = getLatestByAddress();
+  const showStreet = opts.showStreet !== false;
+  const showRova = opts.showRova !== false;
+
+  const rows = addresses.map(a => {
+    const r = latestByAddr[a.address_id];
+    const residents = state.mmdByAddress[a.address_id] || 0;
+    const bins = r ? (Number(r['פחי 360']) || 0) + (Number(r['פחי 1100']) || 0) : 0;
+    const status = r
+      ? '<span style="color:var(--success);font-weight:600;">✓ נסקר</span>'
+      : '<span style="color:var(--text-muted);">○ לא נסקר</span>';
+    return `
+      <tr onclick="openAddressDetail('${escapeJs(a.address_id)}')" style="cursor:pointer;">
+        ${showStreet ? `<td><strong>${escapeHtml(a['שם רחוב'] || '')}</strong></td>` : ''}
+        <td><strong>${escapeHtml(String(a['מספר בית'] || ''))}</strong></td>
+        ${showRova ? `<td>${a['קוד רובע'] ? `<span class="badge teal">${escapeHtml(a['קוד רובע'])}</span>` : '<span class="inline-mini">—</span>'}</td>` : ''}
+        <td>${status}</td>
+        <td>${r ? `<span class="bin-pill s360">${fmtNum(r['פחי 360'])}</span>` : '—'}</td>
+        <td>${r ? `<span class="bin-pill s1100">${fmtNum(r['פחי 1100'])}</span>` : '—'}</td>
+        <td>${bins > 0 ? `<strong>${fmtNum(bins)}</strong>` : '—'}</td>
+        <td>${residents > 0 ? fmtNum(residents) : '<span class="inline-mini">—</span>'}</td>
+        <td>${r ? escapeHtml(r['סוקר'] || '') : '—'}</td>
+      </tr>`;
+  }).join('');
+
+  return `<div class="tbl-wrap"><table class="tbl">
+    <thead><tr>
+      ${showStreet ? '<th>רחוב</th>' : ''}
+      <th>מספר</th>
+      ${showRova ? '<th>רובע</th>' : ''}
+      <th>סטטוס</th>
+      <th>360</th><th>1100</th><th>פחים</th>
+      <th>תושבים</th>
+      <th>סוקר</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+/** פרטי רובע - סיכום + רשימת רחובות + טבלת כתובות. */
+function openRovaDetail(rovaName) {
+  const rovaAddresses = state.addresses.filter(a => (a['שם רובע'] || 'לא משויך') === rovaName);
+  if (rovaAddresses.length === 0) { toast('רובע לא נמצא', 'error'); return; }
+
+  const rovaCode = rovaAddresses[0]['קוד רובע'] || '';
+  const latestByAddr = getLatestByAddress();
+
+  // Stats
+  const done = rovaAddresses.filter(a => latestByAddr[a.address_id]).length;
+  const pct = rovaAddresses.length ? (done / rovaAddresses.length) * 100 : 0;
+  let bins360 = 0, bins1100 = 0, broken = 0, residents = 0;
+  for (const a of rovaAddresses) {
+    const r = latestByAddr[a.address_id];
+    residents += state.mmdByAddress[a.address_id] || 0;
+    if (r) {
+      bins360 += Number(r['פחי 360']) || 0;
+      bins1100 += Number(r['פחי 1100']) || 0;
+      broken += (Number(r['פחי 360 שבורים']) || 0) + (Number(r['פחי 1100 שבורים']) || 0);
+    }
+  }
+
+  // Streets in this rova
+  const streetMap = {};
+  for (const a of rovaAddresses) {
+    const s = a['שם רחוב'];
+    if (!s) continue;
+    if (!streetMap[s]) streetMap[s] = { name: s, addresses: 0, done: 0, bins: 0, residents: 0 };
+    streetMap[s].addresses++;
+    streetMap[s].residents += state.mmdByAddress[a.address_id] || 0;
+    const r = latestByAddr[a.address_id];
+    if (r) {
+      streetMap[s].done++;
+      streetMap[s].bins += (Number(r['פחי 360']) || 0) + (Number(r['פחי 1100']) || 0);
+    }
+  }
+  const streets = Object.values(streetMap).sort((a, b) => b.done - a.done);
+
+  const streetsHtml = streets.map(s => `
+    <tr onclick="openStreetDetail('${escapeJs(s.name)}')" style="cursor:pointer;">
+      <td><a class="drill-link">${escapeHtml(s.name)}</a></td>
+      <td>${fmtNum(s.addresses)}</td>
+      <td style="color:var(--success);font-weight:600;">${fmtNum(s.done)}</td>
+      <td>${fmtPct(s.addresses ? (s.done/s.addresses)*100 : 0)}</td>
+      <td>${s.bins > 0 ? fmtNum(s.bins) : '—'}</td>
+      <td>${s.residents > 0 ? fmtNum(s.residents) : '—'}</td>
+    </tr>`).join('');
+
+  const html = `
+    <div style="background:linear-gradient(135deg,var(--teal-light),var(--gold-light));padding:16px;border-radius:12px;margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--text-muted);letter-spacing:.5px;">רובע</div>
+      <div style="font-size:22px;font-weight:800;color:var(--navy);margin:2px 0;">${escapeHtml(rovaCode || rovaName)}</div>
+      ${rovaCode ? `<div style="font-size:13px;color:var(--text-muted);">${escapeHtml(rovaName)}</div>` : ''}
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi navy"><div class="kpi-label">כתובות</div><div class="kpi-value">${fmtNum(rovaAddresses.length)}</div></div>
+      <div class="kpi success"><div class="kpi-label">נסקרו</div><div class="kpi-value">${fmtNum(done)}</div><div class="kpi-sub">${fmtPct(pct)}</div></div>
+      <div class="kpi gold"><div class="kpi-label">פחים</div><div class="kpi-value">${fmtNum(bins360 + bins1100)}</div><div class="kpi-sub">360: ${fmtNum(bins360)} · 1100: ${fmtNum(bins1100)}</div></div>
+      <div class="kpi warning"><div class="kpi-label">תושבים</div><div class="kpi-value">${fmtNum(residents)}</div><div class="kpi-sub">ב-${fmtNum(streets.length)} רחובות</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">🏘️ רחובות ברובע (${streets.length})</div></div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>רחוב</th><th>כתובות</th><th>נסקרו</th><th>%</th><th>פחים</th><th>תושבים</th></tr></thead>
+        <tbody>${streetsHtml}</tbody>
+      </table></div>
+    </div>
+  `;
+
+  openModal(`רובע: ${rovaCode || rovaName}`, html);
+}
+
+/** פרטי רחוב - כתובות + סקירות. */
+function openStreetDetail(streetName) {
+  const streetAddresses = state.addresses.filter(a => a['שם רחוב'] === streetName);
+  if (streetAddresses.length === 0) { toast('רחוב לא נמצא', 'error'); return; }
+
+  const rova = streetAddresses[0]['שם רובע'] || 'לא משויך';
+  const rovaCode = streetAddresses[0]['קוד רובע'] || '';
+  const latestByAddr = getLatestByAddress();
+
+  const done = streetAddresses.filter(a => latestByAddr[a.address_id]).length;
+  let bins360 = 0, bins1100 = 0, broken = 0, residents = 0;
+  for (const a of streetAddresses) {
+    residents += state.mmdByAddress[a.address_id] || 0;
+    const r = latestByAddr[a.address_id];
+    if (r) {
+      bins360 += Number(r['פחי 360']) || 0;
+      bins1100 += Number(r['פחי 1100']) || 0;
+      broken += (Number(r['פחי 360 שבורים']) || 0) + (Number(r['פחי 1100 שבורים']) || 0);
+    }
+  }
+
+  const sortedAddrs = [...streetAddresses].sort((a, b) =>
+    (Number(a['מספר בית']) || 0) - (Number(b['מספר בית']) || 0)
+  );
+
+  const html = `
+    <div style="background:var(--bg);padding:16px;border-radius:12px;margin-bottom:16px;">
+      <div style="font-size:11px;color:var(--text-muted);letter-spacing:.5px;">רחוב</div>
+      <div style="font-size:22px;font-weight:800;color:var(--navy);margin:2px 0;">${escapeHtml(streetName)}</div>
+      <div style="font-size:13px;color:var(--text-muted);">
+        <a class="drill-link" onclick="openRovaDetail('${escapeJs(rova)}')">${escapeHtml(rovaCode || rova)}${rovaCode ? ' · ' + escapeHtml(rova) : ''}</a>
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi navy"><div class="kpi-label">כתובות</div><div class="kpi-value">${fmtNum(streetAddresses.length)}</div></div>
+      <div class="kpi success"><div class="kpi-label">נסקרו</div><div class="kpi-value">${fmtNum(done)}</div><div class="kpi-sub">${fmtPct(streetAddresses.length ? (done/streetAddresses.length)*100 : 0)}</div></div>
+      <div class="kpi gold"><div class="kpi-label">פחים</div><div class="kpi-value">${fmtNum(bins360 + bins1100)}</div><div class="kpi-sub">360: ${fmtNum(bins360)} · 1100: ${fmtNum(bins1100)}</div></div>
+      <div class="kpi warning"><div class="kpi-label">תושבים</div><div class="kpi-value">${fmtNum(residents)}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">📍 כתובות (${streetAddresses.length})</div></div>
+      ${buildAddressesTable(sortedAddrs, { showStreet: false, showRova: false })}
+    </div>
+  `;
+
+  openModal(`רחוב: ${streetName}`, html);
+}
+
+/** פרטי סוקר - כל הסקירות שלו. */
+function openSurveyorDetail(surveyorName) {
+  if (!surveyorName) return;
+  const records = state.records.filter(r => r['סוקר'] === surveyorName);
+  if (records.length === 0) {
+    openModal(`סוקר: ${surveyorName}`, '<div class="empty">לסוקר זה אין סקירות פעילות</div>');
+    return;
+  }
+
+  // Stats
+  const uniqueAddresses = new Set(records.map(r => r.address_id)).size;
+  let bins360 = 0, bins1100 = 0, broken = 0;
+  const days = new Set();
+  for (const r of records) {
+    bins360 += Number(r['פחי 360']) || 0;
+    bins1100 += Number(r['פחי 1100']) || 0;
+    broken += (Number(r['פחי 360 שבורים']) || 0) + (Number(r['פחי 1100 שבורים']) || 0);
+    if (r.timestamp) days.add(dayKey(r.timestamp));
+  }
+
+  const sorted = [...records].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const color = state.surveyorColors[surveyorName] || 'var(--text)';
+
+  const html = `
+    <div style="background:${color}22;padding:16px;border-radius:12px;margin-bottom:16px;border-right:4px solid ${color};">
+      <div style="font-size:11px;color:var(--text-muted);letter-spacing:.5px;">סוקר</div>
+      <div style="font-size:22px;font-weight:800;color:${color};margin:2px 0;">${escapeHtml(surveyorName)}</div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi navy"><div class="kpi-label">סקירות</div><div class="kpi-value">${fmtNum(records.length)}</div></div>
+      <div class="kpi success"><div class="kpi-label">כתובות ייחודיות</div><div class="kpi-value">${fmtNum(uniqueAddresses)}</div></div>
+      <div class="kpi gold"><div class="kpi-label">פחים</div><div class="kpi-value">${fmtNum(bins360 + bins1100)}</div><div class="kpi-sub">360: ${fmtNum(bins360)} · 1100: ${fmtNum(bins1100)}</div></div>
+      <div class="kpi warning"><div class="kpi-label">ימי פעילות</div><div class="kpi-value">${fmtNum(days.size)}</div><div class="kpi-sub">${broken > 0 ? '⚠️ ' + broken + ' שבורים' : ''}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">📋 כל הסקירות (${records.length})</div></div>
+      ${buildRecordsTable(sorted, { showSurveyor: false })}
+    </div>
+  `;
+
+  openModal(`סוקר: ${surveyorName}`, html);
+}
+
+/** רשימת כל הכתובות שנסקרו - עם דריל לכל אחת */
+function openSurveyedAddresses() {
+  const latestByAddr = getLatestByAddress();
+  const done = state.addresses.filter(a => latestByAddr[a.address_id]);
+  const sorted = [...done].sort((a, b) => {
+    const ta = new Date(latestByAddr[a.address_id].timestamp).getTime();
+    const tb = new Date(latestByAddr[b.address_id].timestamp).getTime();
+    return tb - ta;
+  });
+
+  const html = `
+    <div style="margin-bottom:12px;color:var(--text-muted);font-size:13px;">
+      ${fmtNum(sorted.length)} כתובות נסקרו. קליק על שורה לפרטים.
+    </div>
+    ${buildAddressesTable(sorted)}
+  `;
+  openModal(`כתובות שנסקרו (${sorted.length})`, html);
+}
+
+/** רשימת כתובות עם פחים - ממוין מהגבוה לנמוך של פחים מסוג מסוים */
+function openAddressesWithBins(binType) {
+  // binType: '360', '1100', or 'all'
+  const latestByAddr = getLatestByAddress();
+  const list = [];
+  for (const a of state.addresses) {
+    const r = latestByAddr[a.address_id];
+    if (!r) continue;
+    const b360 = Number(r['פחי 360']) || 0;
+    const b1100 = Number(r['פחי 1100']) || 0;
+    let count;
+    if (binType === '360') count = b360;
+    else if (binType === '1100') count = b1100;
+    else count = b360 + b1100;
+    if (count > 0) list.push({ addr: a, count, r });
+  }
+  list.sort((a, b) => b.count - a.count);
+  const addresses = list.map(x => x.addr);
+
+  const titleMap = { '360': 'פחי 360 ליטר', '1100': 'פחי 1100 ליטר', 'all': 'סה"כ פחים' };
+  const total = list.reduce((s, x) => s + x.count, 0);
+
+  const html = `
+    <div style="margin-bottom:12px;color:var(--text-muted);font-size:13px;">
+      ${fmtNum(list.length)} כתובות · סה"כ ${fmtNum(total)} פחים · ממוין מהגבוה לנמוך
+    </div>
+    ${buildAddressesTable(addresses)}
+  `;
+  openModal(`${titleMap[binType]} — כל הכתובות`, html);
+}
+
+/** רשימת כתובות עם פחים שבורים */
+function openBrokenBinsList() {
+  const latestByAddr = getLatestByAddress();
+  const list = [];
+  for (const a of state.addresses) {
+    const r = latestByAddr[a.address_id];
+    if (!r) continue;
+    const b = (Number(r['פחי 360 שבורים']) || 0) + (Number(r['פחי 1100 שבורים']) || 0);
+    if (b > 0) list.push({ addr: a, broken: b });
+  }
+  list.sort((a, b) => b.broken - a.broken);
+
+  const html = `
+    <div style="margin-bottom:12px;color:var(--danger);font-size:13px;font-weight:600;">
+      ⚠️ ${fmtNum(list.length)} כתובות דורשות טיפול · סה"כ ${fmtNum(list.reduce((s, x) => s + x.broken, 0))} פחים שבורים
+    </div>
+    ${buildAddressesTable(list.map(x => x.addr))}
+  `;
+  openModal(`פחים שבורים — כתובות לטיפול`, html);
+}
+
+/** רשימת הכתובות הכי מאוכלסות */
+function openTopResidentAddresses() {
+  const list = state.addresses
+    .filter(a => state.mmdByAddress[a.address_id])
+    .map(a => ({ addr: a, residents: state.mmdByAddress[a.address_id] }))
+    .sort((a, b) => b.residents - a.residents)
+    .slice(0, 100); // top 100
+
+  const html = `
+    <div style="margin-bottom:12px;color:var(--text-muted);font-size:13px;">
+      100 הכתובות הכי מאוכלסות · לפי ממ"ד
+    </div>
+    ${buildAddressesTable(list.map(x => x.addr))}
+  `;
+  openModal(`תושבים בעיר — כתובות מאוכלסות`, html);
+}
+
+/** רשימת סקירות שנעשו ביום מסוים */
+function openDayRecords(dayStr) {
+  const records = state.records.filter(r => r.timestamp && dayKey(r.timestamp) === dayStr);
+  if (records.length === 0) { toast('אין סקירות ביום זה', 'warning'); return; }
+
+  const sorted = [...records].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const bins = records.reduce((s, r) => s + (Number(r['פחי 360']) || 0) + (Number(r['פחי 1100']) || 0), 0);
+  const surveyors = new Set(records.map(r => r['סוקר'])).size;
+
+  const html = `
+    <div style="margin-bottom:12px;color:var(--text-muted);font-size:13px;">
+      ${fmtNum(records.length)} סקירות · ${fmtNum(bins)} פחים · ${surveyors} סוקרים
+    </div>
+    ${buildRecordsTable(sorted)}
+  `;
+  openModal(`סקירות ביום ${dayStr}`, html);
+}
+
+/* ═══════════════════════════════════════════════════
+   MODAL — supports a navigation stack for drill-down
+   ═══════════════════════════════════════════════════ */
+const modalStack = []; // Each entry: { title, html }
+
 function openModal(title, html) {
+  // If already open, push onto stack so "Back" works
+  const isCurrentlyOpen = $('#modal').classList.contains('active');
+  if (isCurrentlyOpen) {
+    modalStack.push({
+      title: $('#modal-title').textContent,
+      html: $('#modal-body').innerHTML
+    });
+  }
   $('#modal-title').textContent = title;
   $('#modal-body').innerHTML = html;
   $('#modal').classList.add('active');
+  updateModalBackButton();
 }
-function closeModal() { $('#modal').classList.remove('active'); }
+
+function closeModal() {
+  modalStack.length = 0; // Clear stack when fully closing
+  $('#modal').classList.remove('active');
+}
+
+function backModal() {
+  if (modalStack.length === 0) { closeModal(); return; }
+  const prev = modalStack.pop();
+  $('#modal-title').textContent = prev.title;
+  $('#modal-body').innerHTML = prev.html;
+  updateModalBackButton();
+}
+
+function updateModalBackButton() {
+  const btn = $('#modal-back');
+  if (!btn) return;
+  btn.style.display = modalStack.length > 0 ? '' : 'none';
+}
 
 /* פרטים מלאים של כתובת עם כל הסקירות והתמונות */
 function openAddressDetail(addressId) {
@@ -3847,8 +4505,8 @@ function renderRovaAnalysis() {
   });
 
   $('#rova-tbody').innerHTML = sorted.map(s => `
-    <tr>
-      <td><strong>${escapeHtml(s.code || s.name)}</strong>${s.code ? ` <span class="inline-mini" style="display:block;margin-top:2px;">${escapeHtml(s.name)}</span>` : ''}</td>
+    <tr onclick="openRovaDetail('${escapeJs(s.name)}')" style="cursor:pointer;">
+      <td><a class="drill-link"><strong>${escapeHtml(s.code || s.name)}</strong></a>${s.code ? ` <span class="inline-mini" style="display:block;margin-top:2px;">${escapeHtml(s.name)}</span>` : ''}</td>
       <td><strong>${fmtNum(s.addresses)}</strong></td>
       <td style="color:var(--success);font-weight:600;">${fmtNum(s.done)}</td>
       <td style="color:var(--text-muted);">${fmtNum(s.remaining)}</td>
@@ -3865,10 +4523,10 @@ function renderRovaAnalysis() {
   // Progress bars
   const bars = [...stats].sort((a, b) => b.pct - a.pct);
   $('#rova-progress-bars').innerHTML = bars.map(s => `
-    <div style="margin-bottom:12px;">
+    <div style="margin-bottom:12px;cursor:pointer;" onclick="openRovaDetail('${escapeJs(s.name)}')">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px;">
         <div>
-          <strong>${escapeHtml(s.code || s.name)}</strong>
+          <a class="drill-link"><strong>${escapeHtml(s.code || s.name)}</strong></a>
           ${s.code ? `<span style="color:var(--text-muted);font-size:11px;margin-right:6px;">${escapeHtml(s.name)}</span>` : ''}
         </div>
         <span style="color:var(--text-muted);">${fmtNum(s.done)}/${fmtNum(s.addresses)} · ${fmtPct(s.pct)}</span>
