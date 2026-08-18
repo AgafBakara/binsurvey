@@ -590,9 +590,9 @@ table.tbl {
 .modal-box {
   background: var(--surface);
   border-radius: var(--radius-lg);
-  max-width: 600px;
+  max-width: 1200px;
   width: 100%;
-  max-height: 90vh;
+  max-height: 92vh;
   overflow: auto;
   box-shadow: var(--shadow-lg);
   animation: modal-in .3s;
@@ -1440,6 +1440,14 @@ table.tbl {
       </div>
       <div id="trend-chart"></div>
     </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="ico">🏙️</span>התקדמות לפי רובע</div>
+        <div class="inline-mini">כמה כתובות יש בכל רובע וכמה נסקרו · קליק לפרטים</div>
+      </div>
+      <div id="trend-rova-list"></div>
+    </div>
   </div>
 
   <!-- ROVA ANALYSIS TAB -->
@@ -1773,9 +1781,12 @@ function fmtDateTime(d) {
   return x.toLocaleDateString('he-IL') + ' ' + x.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
 }
 /** מפתח יום מבוסס אזור זמן מקומי (לא UTC).
- *  באג ישן: toISOString() תמיד UTC, וסקירות ישראליות מ-00:00-03:00 "עברו" ליום הקודם. */
+ *  באג ישן: toISOString() תמיד UTC, וסקירות ישראליות מ-00:00-03:00 "עברו" ליום הקודם.
+ *  מחזיר null אם התאריך לא תקין - כדי שאגרגציות ידלגו עליו במקום להראות "Invalid Date". */
 function dayKey(d) {
+  if (!d) return null;
   const dt = new Date(d);
+  if (isNaN(dt.getTime())) return null;
   const y = dt.getFullYear();
   const m = String(dt.getMonth() + 1).padStart(2, '0');
   const day = String(dt.getDate()).padStart(2, '0');
@@ -2007,6 +2018,7 @@ function computeDailyTrend() {
   for (const r of state.records) {
     if (!r.timestamp) continue;
     const d = dayKey(r.timestamp);
+    if (!d) continue; // Skip records with invalid timestamps
     by[d] = (by[d] || 0) + 1;
   }
   return Object.entries(by)
@@ -2658,6 +2670,62 @@ function renderTrend() {
     </svg>`;
 
   $('#trend-chart').innerHTML = svg;
+
+  // Render rova progress list under the daily chart
+  renderRovaProgressInTrend();
+}
+
+/** מציג טבלת רובעים בטאב המגמות - סה"כ כתובות, כמה נסקרו, אחוז. */
+function renderRovaProgressInTrend() {
+  const container = $('#trend-rova-list');
+  if (!container) return;
+
+  const stats = computeRovaStats().sort((a, b) => b.pct - a.pct);
+  if (stats.length === 0) {
+    container.innerHTML = '<div class="empty">אין נתוני רובעים</div>';
+    return;
+  }
+
+  const total = stats.reduce((s, r) => s + r.addresses, 0);
+  const totalDone = stats.reduce((s, r) => s + r.done, 0);
+  const totalPct = total ? (totalDone / total) * 100 : 0;
+
+  container.innerHTML = `
+    <div style="background:var(--bg);padding:12px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;">
+      <strong>סה"כ:</strong> ${fmtNum(totalDone)} מתוך ${fmtNum(total)} כתובות נסקרו · ${fmtPct(totalPct)}
+    </div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr>
+        <th>רובע</th>
+        <th>סה"כ כתובות</th>
+        <th>נסקרו</th>
+        <th>נותרו</th>
+        <th>אחוז השלמה</th>
+        <th>התקדמות</th>
+      </tr></thead>
+      <tbody>
+        ${stats.map(s => {
+          const color = s.pct >= 80 ? 'var(--success)' : s.pct >= 40 ? 'var(--gold)' : 'var(--warning)';
+          return `
+          <tr onclick="openRovaDetail('${escapeJs(s.name)}')" style="cursor:pointer;">
+            <td>
+              <a class="drill-link"><strong>${escapeHtml(s.code || s.name)}</strong></a>
+              ${s.code ? `<div class="inline-mini" style="margin-top:2px;">${escapeHtml(s.name)}</div>` : ''}
+            </td>
+            <td><strong>${fmtNum(s.addresses)}</strong></td>
+            <td style="color:var(--success);font-weight:600;">${fmtNum(s.done)}</td>
+            <td style="color:var(--text-muted);">${fmtNum(s.remaining)}</td>
+            <td><strong>${fmtPct(s.pct)}</strong></td>
+            <td style="min-width:200px;">
+              <div class="progress-bar" style="height:16px;">
+                <div class="progress-bar-fill" style="width:${s.pct}%;background:${color};"></div>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>
+  `;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -3388,7 +3456,8 @@ function openSurveyorDetail(surveyorName) {
 /** רשימת כל הכתובות שנסקרו - עם דריל לכל אחת */
 function openSurveyedAddresses() {
   const latestByAddr = getLatestByAddress();
-  const done = state.addresses.filter(a => latestByAddr[a.address_id]);
+  const allAddresses = getAllAddressesIncludingFieldAdded();
+  const done = allAddresses.filter(a => latestByAddr[a.address_id]);
   const sorted = [...done].sort((a, b) => {
     const ta = new Date(latestByAddr[a.address_id].timestamp).getTime();
     const tb = new Date(latestByAddr[b.address_id].timestamp).getTime();
@@ -3408,8 +3477,9 @@ function openSurveyedAddresses() {
 function openAddressesWithBins(binType) {
   // binType: '360', '1100', or 'all'
   const latestByAddr = getLatestByAddress();
+  const allAddresses = getAllAddressesIncludingFieldAdded();
   const list = [];
-  for (const a of state.addresses) {
+  for (const a of allAddresses) {
     const r = latestByAddr[a.address_id];
     if (!r) continue;
     const b360 = Number(r['פחי 360']) || 0;
@@ -3438,8 +3508,9 @@ function openAddressesWithBins(binType) {
 /** רשימת כתובות עם פחים שבורים */
 function openBrokenBinsList() {
   const latestByAddr = getLatestByAddress();
+  const allAddresses = getAllAddressesIncludingFieldAdded();
   const list = [];
-  for (const a of state.addresses) {
+  for (const a of allAddresses) {
     const r = latestByAddr[a.address_id];
     if (!r) continue;
     const b = (Number(r['פחי 360 שבורים']) || 0) + (Number(r['פחי 1100 שבורים']) || 0);
