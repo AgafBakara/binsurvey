@@ -3934,6 +3934,24 @@ function openAddressDetail(addressId) {
   const bpr = (stdBins > 0 && residents > 0) ? stdBins / residents : 0;
   const bprCat = binsPerResidentCategory(stdBins, residents);
 
+  // For unsurveyed addresses with residents - show residents block
+  if (!latest && residents > 0) {
+    html += `
+      <div style="background:var(--warning-light);border-right:4px solid var(--warning);border-radius:10px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px;">מידע מהממ"ד — כתובת טרם נסקרה</div>
+        <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;">
+          <div style="font-size:16px;"><strong>👥 ${fmtNum(residents)}</strong> תושבים רשומים</div>
+          <div style="color:var(--warning);font-weight:600;">⚠️ ${bprCat === 'no-data' ? 'אין מידע על פחים' : 'קריטי — יש תושבים ואין סקירה'}</div>
+        </div>
+      </div>`;
+  } else if (!latest && residents === 0) {
+    html += `
+      <div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;color:var(--text-muted);font-size:13px;">
+        <strong>כתובת ללא סקירה וללא תושבים בממ"ד</strong><br>
+        <span style="font-size:12px;">ייתכן שזה מבנה ציבורי, מוסד, או כתובת שאין בה דיירים רשומים.</span>
+      </div>`;
+  }
+
   if (latest) {
     html += `
       <div style="background:var(--teal-lighter);border-radius:10px;padding:14px;margin-bottom:16px;">
