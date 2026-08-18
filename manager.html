@@ -1019,6 +1019,9 @@ table.tbl {
     <button class="tab" data-tab="trend" onclick="switchTab('trend')">
       <span class="tab-icon">📈</span>מגמות
     </button>
+    <button class="tab" data-tab="rova" onclick="switchTab('rova')">
+      <span class="tab-icon">🏙️</span>ניתוח לפי רובע
+    </button>
     <button class="tab" data-tab="qa" onclick="switchTab('qa')">
       <span class="tab-icon">🔍</span>בקרת איכות
     </button>
@@ -1065,6 +1068,11 @@ table.tbl {
         <div class="kpi-label"><span class="ico">🗑️</span>סה"כ פחים</div>
         <div class="kpi-value" id="kpi-bins">—</div>
         <div class="kpi-sub" id="kpi-bins-sub">—</div>
+      </div>
+      <div class="kpi navy" id="kpi-residents-card" style="display:none;">
+        <div class="kpi-label"><span class="ico">👥</span>תושבים בעיר</div>
+        <div class="kpi-value" id="kpi-residents">—</div>
+        <div class="kpi-sub" id="kpi-residents-sub">לפי ממ"ד</div>
       </div>
     </div>
 
@@ -1318,6 +1326,73 @@ table.tbl {
     </div>
   </div>
 
+  <!-- ROVA ANALYSIS TAB -->
+  <div class="panel" id="panel-rova">
+    <div class="section-header">
+      <div>
+        <div class="section-title">ניתוח לפי רובע</div>
+        <div class="section-subtitle">תמונת מצב הספירה בכל רובע — כתובות, פחים, תושבים</div>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="rova-kpi-grid">
+      <div class="kpi navy">
+        <div class="kpi-label"><span class="ico">🏙️</span>סה"כ רובעים</div>
+        <div class="kpi-value" id="rova-count">—</div>
+        <div class="kpi-sub" id="rova-count-sub">רובעים במערכת</div>
+      </div>
+      <div class="kpi success">
+        <div class="kpi-label"><span class="ico">✓</span>רובע השיא</div>
+        <div class="kpi-value" id="rova-top" style="font-size:22px;">—</div>
+        <div class="kpi-sub" id="rova-top-sub">הכי הרבה נסקרו</div>
+      </div>
+      <div class="kpi warning">
+        <div class="kpi-label"><span class="ico">📊</span>ממוצע השלמה</div>
+        <div class="kpi-value" id="rova-avg">—</div>
+        <div class="kpi-sub">בכלל הרובעים</div>
+      </div>
+      <div class="kpi gold">
+        <div class="kpi-label"><span class="ico">👥</span>ממוצע תושבים לכתובת</div>
+        <div class="kpi-value" id="rova-avg-residents">—</div>
+        <div class="kpi-sub" id="rova-avg-residents-sub">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="ico">🏙️</span>תמונת מצב לפי רובע</div>
+        <button class="top-btn" onclick="exportRovaAnalysis()">📥 ייצא לאקסל</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl" id="rova-table">
+          <thead>
+            <tr>
+              <th onclick="sortRovaTable('name')" style="cursor:pointer;">רובע</th>
+              <th onclick="sortRovaTable('addresses')" style="cursor:pointer;">כתובות</th>
+              <th onclick="sortRovaTable('done')" style="cursor:pointer;">נסקרו</th>
+              <th onclick="sortRovaTable('remaining')" style="cursor:pointer;">נותרו</th>
+              <th onclick="sortRovaTable('pct')" style="cursor:pointer;">% השלמה</th>
+              <th onclick="sortRovaTable('bins')" style="cursor:pointer;">סה"כ פחים</th>
+              <th onclick="sortRovaTable('bins360')" style="cursor:pointer;">פחי 360</th>
+              <th onclick="sortRovaTable('bins1100')" style="cursor:pointer;">פחי 1100</th>
+              <th onclick="sortRovaTable('broken')" style="cursor:pointer;">שבורים</th>
+              <th onclick="sortRovaTable('residents')" style="cursor:pointer;">תושבים</th>
+              <th onclick="sortRovaTable('binsPerResident')" style="cursor:pointer;">פחים/תושב</th>
+            </tr>
+          </thead>
+          <tbody id="rova-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="ico">📊</span>אחוז השלמה לפי רובע</div>
+      </div>
+      <div id="rova-progress-bars"></div>
+    </div>
+  </div>
+
   <!-- QA TAB -->
   <div class="panel" id="panel-qa">
     <div class="section-header">
@@ -1546,10 +1621,12 @@ const state = {
   surveyors: [],
   lastSync: null,
   loading: false,
-  sort: { records: { col: 'timestamp', dir: 'desc' }, surveyors: { col: 'count', dir: 'desc' }, streets: { col: 'name', dir: 'asc' } },
+  sort: { records: { col: 'timestamp', dir: 'desc' }, surveyors: { col: 'count', dir: 'desc' }, streets: { col: 'name', dir: 'asc' }, rova: { col: 'done', dir: 'desc' } },
   map: null,
   mapMarkers: [],
   surveyorColors: {},
+  mmd: [],
+  mmdByAddress: {},
   settings: { dupeDaysWindow: 14 } // will be overridden by loadSettings()
 };
 
@@ -1636,6 +1713,12 @@ async function refresh() {
     state._recordsAll = data.records || [];
     state.records = state._recordsAll.filter(r => !r['נמחק']);
     state.surveyors = data.surveyors || [];
+    state.mmd = data.mmd || [];
+    // Build address_id -> תושבים map for quick lookup
+    state.mmdByAddress = {};
+    for (const m of state.mmd) {
+      if (m.address_id) state.mmdByAddress[m.address_id] = Number(m['תושבים']) || 0;
+    }
     state.lastSync = new Date();
     assignSurveyorColors();
     renderAll();
@@ -1837,6 +1920,15 @@ function renderOverview() {
 
   $('#kpi-bins').textContent = fmtNum(ov.sumBins);
   $('#kpi-bins-sub').innerHTML = `<span class="bin-pill s360">360: ${fmtNum(ov.sum360)}</span> <span class="bin-pill s1100">1100: ${fmtNum(ov.sum1100)}</span>`;
+
+  // KPI תושבים - רק אם יש נתוני ממ"ד
+  const totalResidents = Object.values(state.mmdByAddress).reduce((s, n) => s + n, 0);
+  if (totalResidents > 0) {
+    $('#kpi-residents-card').style.display = '';
+    $('#kpi-residents').textContent = fmtNum(totalResidents);
+    const withResidents = Object.keys(state.mmdByAddress).length;
+    $('#kpi-residents-sub').textContent = `ב-${fmtNum(withResidents)} כתובות`;
+  }
 
   $('#kpi-360').textContent = fmtNum(ov.sum360);
   $('#kpi-360-sub').textContent = `ממוצע לכתובת: ${ov.avg360.toFixed(1)}`;
@@ -3660,6 +3752,151 @@ async function doMerge(keepId, mergeId) {
 }
 
 /* ═══════════════════════════════════════════════════
+   ROVA (NEIGHBORHOOD) ANALYSIS
+   ═══════════════════════════════════════════════════ */
+
+/** מחשב סטטיסטיקה לכל רובע. */
+function computeRovaStats() {
+  const latestByAddr = getLatestByAddress();
+  const stats = {};
+
+  for (const a of state.addresses) {
+    const rovaName = a['שם רובע'] || 'לא משויך';
+    const rovaCode = a['קוד רובע'] || '';
+    if (!stats[rovaName]) {
+      stats[rovaName] = {
+        name: rovaName,
+        code: rovaCode,
+        addresses: 0,
+        done: 0,
+        remaining: 0,
+        bins360: 0,
+        bins1100: 0,
+        broken360: 0,
+        broken1100: 0,
+        residents: 0
+      };
+    }
+    const s = stats[rovaName];
+    s.addresses++;
+    s.residents += state.mmdByAddress[a.address_id] || 0;
+
+    const r = latestByAddr[a.address_id];
+    if (r) {
+      s.done++;
+      s.bins360   += Number(r['פחי 360']) || 0;
+      s.bins1100  += Number(r['פחי 1100']) || 0;
+      s.broken360 += Number(r['פחי 360 שבורים']) || 0;
+      s.broken1100 += Number(r['פחי 1100 שבורים']) || 0;
+    } else {
+      s.remaining++;
+    }
+  }
+
+  // computed fields
+  return Object.values(stats).map(s => ({
+    ...s,
+    bins: s.bins360 + s.bins1100,
+    broken: s.broken360 + s.broken1100,
+    pct: s.addresses > 0 ? (s.done / s.addresses) * 100 : 0,
+    binsPerResident: s.residents > 0 ? (s.bins360 + s.bins1100) / s.residents : 0
+  }));
+}
+
+function sortRovaTable(col) {
+  const cur = state.sort.rova;
+  if (cur.col === col) cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+  else { cur.col = col; cur.dir = 'desc'; }
+  renderRovaAnalysis();
+}
+
+function renderRovaAnalysis() {
+  const stats = computeRovaStats();
+  if (stats.length === 0) {
+    $('#rova-tbody').innerHTML = '<tr><td colspan="11" class="empty">אין נתוני רובעים</td></tr>';
+    return;
+  }
+
+  // KPIs
+  const totalRovaim = stats.length;
+  const withData = stats.filter(s => s.name !== 'לא משויך');
+  const topRova = [...stats].sort((a, b) => b.done - a.done)[0];
+  const avgPct = stats.reduce((sum, s) => sum + s.pct, 0) / stats.length;
+  const totalResidents = stats.reduce((s, r) => s + r.residents, 0);
+  const totalAddrWithRes = stats.reduce((s, r) => s + (r.residents > 0 ? r.addresses : 0), 0);
+  const avgResPerAddr = totalAddrWithRes > 0 ? totalResidents / totalAddrWithRes : 0;
+
+  $('#rova-count').textContent = fmtNum(totalRovaim);
+  $('#rova-count-sub').textContent = withData.length + ' משויכים · ' + (totalRovaim - withData.length) + ' לא משויך';
+  $('#rova-top').textContent = topRova.name;
+  $('#rova-top-sub').textContent = fmtNum(topRova.done) + ' סקירות · ' + fmtPct(topRova.pct);
+  $('#rova-avg').textContent = fmtPct(avgPct);
+  $('#rova-avg-residents').textContent = avgResPerAddr > 0 ? avgResPerAddr.toFixed(1) : '—';
+  $('#rova-avg-residents-sub').textContent = totalResidents > 0 ? fmtNum(totalResidents) + ' תושבים סה"כ' : 'אין ממ"ד';
+
+  // Sort
+  const { col, dir } = state.sort.rova;
+  const sorted = [...stats].sort((a, b) => {
+    let av = a[col], bv = b[col];
+    if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+    if (av < bv) return dir === 'asc' ? -1 : 1;
+    if (av > bv) return dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  $('#rova-tbody').innerHTML = sorted.map(s => `
+    <tr>
+      <td><strong>${escapeHtml(s.name)}</strong>${s.code ? ` <span class="inline-mini">${escapeHtml(s.code)}</span>` : ''}</td>
+      <td><strong>${fmtNum(s.addresses)}</strong></td>
+      <td style="color:var(--success);font-weight:600;">${fmtNum(s.done)}</td>
+      <td style="color:var(--text-muted);">${fmtNum(s.remaining)}</td>
+      <td><strong>${fmtPct(s.pct)}</strong></td>
+      <td><strong>${fmtNum(s.bins)}</strong></td>
+      <td><span class="bin-pill s360">${fmtNum(s.bins360)}</span></td>
+      <td><span class="bin-pill s1100">${fmtNum(s.bins1100)}</span></td>
+      <td>${s.broken > 0 ? `<span style="color:#8a6d10;font-weight:600;">⚠️ ${fmtNum(s.broken)}</span>` : '<span style="color:var(--text-dim);">—</span>'}</td>
+      <td>${s.residents > 0 ? fmtNum(s.residents) : '<span style="color:var(--text-dim);">—</span>'}</td>
+      <td>${s.binsPerResident > 0 ? s.binsPerResident.toFixed(2) : '<span style="color:var(--text-dim);">—</span>'}</td>
+    </tr>
+  `).join('');
+
+  // Progress bars
+  const bars = [...stats].sort((a, b) => b.pct - a.pct);
+  $('#rova-progress-bars').innerHTML = bars.map(s => `
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px;">
+        <strong>${escapeHtml(s.name)}</strong>
+        <span style="color:var(--text-muted);">${fmtNum(s.done)}/${fmtNum(s.addresses)} · ${fmtPct(s.pct)}</span>
+      </div>
+      <div class="progress-bar" style="height:14px;">
+        <div class="progress-bar-fill" style="width:${s.pct}%;background:${s.pct >= 80 ? 'var(--success)' : s.pct >= 40 ? 'var(--gold)' : 'var(--warning)'};"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function exportRovaAnalysis() {
+  const stats = computeRovaStats();
+  const rows = stats.map(s => ({
+    'רובע': s.name,
+    'קוד רובע': s.code,
+    'כתובות': s.addresses,
+    'נסקרו': s.done,
+    'נותרו': s.remaining,
+    'אחוז השלמה': fmtPct(s.pct),
+    'סה"כ פחים': s.bins,
+    'פחי 360': s.bins360,
+    'פחי 1100': s.bins1100,
+    'שבורים 360': s.broken360,
+    'שבורים 1100': s.broken1100,
+    'סה"כ שבורים': s.broken,
+    'תושבים': s.residents,
+    'פחים לתושב': s.binsPerResident > 0 ? s.binsPerResident.toFixed(3) : ''
+  }));
+  downloadData(rows, 'ניתוח_לפי_רובע', 'xlsx');
+}
+
+/* ═══════════════════════════════════════════════════
    TAB SWITCHING
    ═══════════════════════════════════════════════════ */
 function switchTab(name) {
@@ -3670,6 +3907,7 @@ function switchTab(name) {
     setTimeout(() => { state.map.invalidateSize(); if (state.mapMarkers.length === 0) renderMap(); }, 100);
   }
   if (name === 'qa') renderQAPanel();
+  if (name === 'rova') renderRovaAnalysis();
   if (name === 'settings') {
     $('#settings-dupe-days').value = state.settings.dupeDaysWindow;
   }
